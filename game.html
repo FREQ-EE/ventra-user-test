@@ -45,7 +45,6 @@
       background:linear-gradient(90deg, var(--accentA), var(--accentB));
       -webkit-background-clip:text; background-clip:text; color:transparent;
     }
-    .sub{ margin:0; color:var(--muted); font-size:12px; }
 
     .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 
@@ -64,13 +63,11 @@
       white-space:nowrap;
       user-select:none;
     }
-    .pillStrong{ color:var(--text); }
-
     .pillButton{
       cursor:pointer;
-      transition: border-color 120ms ease;
+      transition: border-color 120ms ease, color 120ms ease;
     }
-    .pillButton:hover{ border-color:var(--accentA); }
+    .pillButton:hover{ border-color:var(--accentA); color:var(--text); }
 
     #ccPill { min-width: 86px; justify-content: center; }
 
@@ -85,10 +82,11 @@
       display:inline-flex; align-items:center; gap:8px;
       color:var(--muted);
       transition: border-color 120ms ease, color 120ms ease;
+      user-select:none;
     }
     .iconBtn:hover{ border-color:var(--accentA); color:var(--text); }
-    .iconBtn svg{ width:18px; height:18px; }
-    .iconBtn svg{ pointer-events:none; }
+    .iconBtn svg{ width:18px; height:18px; pointer-events:none; }
+
     .iconOn, .iconOff{ display:none; }
     .iconBtn[data-on="1"] .iconOn{ display:block; }
     .iconBtn[data-on="0"] .iconOff{ display:block; }
@@ -171,7 +169,7 @@
         <span class="pill pillButton" id="ventraPill" title="Click to enable WebMIDI">Ventra: click to enable</span>
         <span class="pill" id="ccPill">CC2: 000</span>
 
-        <button class="iconBtn" id="audioToggle" type="button" data-on="0" aria-label="Toggle music" title="Toggle music">
+        <button class="iconBtn" id="audioToggle" type="button" data-on="1" aria-label="Toggle music" title="Toggle music">
           <!-- Speaker ON -->
           <svg class="iconOn" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path fill="currentColor" d="M3 10v4h4l5 4V6L7 10H3zm13.5 2a3.5 3.5 0 0 0-1.5-2.9v5.8A3.5 3.5 0 0 0 16.5 12zm0-7a1 1 0 0 0-.7 1.7A8 8 0 0 1 18 12a8 8 0 0 1-2.2 5.3 1 1 0 1 0 1.4 1.4A10 10 0 0 0 20 12a10 10 0 0 0-2.8-6.7 1 1 0 0 0-.7-.3z"/>
@@ -211,8 +209,8 @@
        Browsers do not reliably play .mid directly.
        Replace src with a rendered audio file (mp3/ogg) when ready. -->
   <audio id="bgm" loop preload="auto">
-  <source src="./music.ogg" type="audio/ogg">
-  <source src="./music.mp3" type="audio/mpeg">
+    <source src="./music.ogg" type="audio/ogg">
+    <source src="./music.mp3" type="audio/mpeg">
   </audio>
 
   <script>
@@ -252,6 +250,26 @@
     const COLL_CY_OFF_FRAC = 0.03;
 
     // ============================================================
+    // Game state (declared early so audio code can read it safely)
+    // ============================================================
+    const world = {
+      started: false,
+      over: false,
+      survive: 0,
+
+      baseSpeed: 180,
+      speedGain: 2,
+      speed: 180,
+
+      groundPad: 22,
+      topPad: 22,
+
+      distAcc: 0,
+      nextSpawnDist: 620,
+      obstacles: []
+    };
+
+    // ============================================================
     // WebMIDI (Channel 1, CC2) - Ventra auto attach
     // ============================================================
     const targetChannel1Based = 1;
@@ -277,54 +295,80 @@
     function findVentraInput() {
       if (!midiAccess) return null;
       const inputs = Array.from(midiAccess.inputs.values());
-      const byName = inputs.find(i => (i.name || '').toLowerCase().includes('ventra'));
-      return byName || null;
+
+      const isVentra = (i) => {
+        const n = (i.name || '').toLowerCase();
+        const m = (i.manufacturer || '').toLowerCase();
+        return n.includes('ventra') || m.includes('ventra');
+      };
+
+      return inputs.find(isVentra) || null;
     }
 
     function attachVentraIfPresent() {
       detachCurrentInput();
+
       const input = findVentraInput();
       if (!input) {
         setVentraPill('Ventra: not connected (click to retry)', true, 'Click to retry Ventra detection');
         return false;
       }
+
       currentInput = input;
       currentInput.onmidimessage = onMIDIMessage;
-      setVentraPill('Ventra: connected', false);
+
+      const label = (input.name || 'Ventra').trim();
+      setVentraPill(`Ventra: connected (${label})`, false, '');
       return true;
+    }
+
+    function retryAttachVentraWithDelay() {
+      // immediate attempt
+      if (attachVentraIfPresent()) return;
+
+      // OS/device enumeration can lag; try again shortly
+      setTimeout(() => { attachVentraIfPresent(); }, 250);
+      setTimeout(() => { attachVentraIfPresent(); }, 800);
     }
 
     async function enableMIDI() {
       if (!('requestMIDIAccess' in navigator)) {
-        setVentraPill('Ventra: unsupported', false);
+        setVentraPill('Ventra: unsupported', false, '');
         return;
       }
 
       try {
         midiAccess = await navigator.requestMIDIAccess({ sysex: false });
-        // Attempt immediate attach
-        attachVentraIfPresent();
 
-        // Watch hot-plug
+        retryAttachVentraWithDelay();
+
         midiAccess.onstatechange = () => {
-          // If already attached and still present, keep.
-          // Otherwise re-scan and attach when Ventra appears.
           const want = findVentraInput();
-          const have = currentInput && want && currentInput.id === want.id;
-          if (!have) attachVentraIfPresent();
+
+          if (!want) {
+            // Ventra disappeared (or still absent)
+            detachCurrentInput();
+            setVentraPill('Ventra: not connected (click to retry)', true, 'Click to retry Ventra detection');
+            return;
+          }
+
+          // Ventra present: ensure attached to the correct endpoint
+          if (!currentInput || currentInput.id !== want.id) {
+            retryAttachVentraWithDelay();
+          } else {
+            setVentraPill(`Ventra: connected (${(want.name || 'Ventra').trim()})`, false, '');
+          }
         };
       } catch (err) {
         console.error(err);
-        setVentraPill('Ventra: permission denied', true);
+        setVentraPill('Ventra: permission denied (click to retry)', true, 'Click to retry WebMIDI permission');
       }
     }
 
-    // WebMIDI generally requires a user gesture: we use the pill as the gesture target.
     ventraPill.addEventListener('click', () => {
       if (!midiAccess) enableMIDI();
-      else attachVentraIfPresent(); // retry scan/attach
+      else retryAttachVentraWithDelay();
     });
-
 
     // Initial UI state
     setVentraPill('Ventra: click to enable', true, 'Click to enable WebMIDI');
@@ -332,7 +376,6 @@
     // ============================================================
     // Music toggle (simple audio loop)
     // ============================================================
-    
     const audioToggle = document.getElementById('audioToggle');
     const bgm = document.getElementById('bgm');
     const AUDIO_KEY = 'ventra_game_music';
@@ -340,7 +383,7 @@
     function musicIsArmed() {
       return audioToggle.dataset.on === '1';
     }
-    
+
     async function startMusicIfArmed() {
       if (!bgm) return;
       if (!musicIsArmed()) return;
@@ -348,37 +391,38 @@
         await bgm.play();
       } catch (e) {
         console.warn('Audio play failed:', e);
-        // Keep UI state; user may need another gesture depending on browser policy.
+        // Keep UI state; browser may require an additional gesture.
       }
     }
-    
+
     function stopMusic() {
       if (!bgm) return;
       bgm.pause();
       bgm.currentTime = 0;
     }
-    
+
     function setAudioUI(on) {
       audioToggle.dataset.on = on ? '1' : '0';
     }
 
-    async function setAudio(on) {
+    function setAudio(on) {
       localStorage.setItem(AUDIO_KEY, on ? '1' : '0');
       setAudioUI(on);
 
       if (!bgm) return;
 
       if (on) {
-        // Do not start yet; start when the game starts.
-        // If game is already running, we can start immediately:
-        if (world && world.started) startMusicIfArmed();
+        // Do not autoplay; start only once the game starts (or immediately if already running).
+        if (world.started) startMusicIfArmed();
       } else {
         stopMusic();
       }
     }
 
-    // restore preference (does not auto-play reliably due to gesture rules)
-    setAudioUI(localStorage.getItem(AUDIO_KEY) === '1');
+    // Default music: ON (unmuted) if no saved preference exists.
+    const saved = localStorage.getItem(AUDIO_KEY);
+    if (saved === null) localStorage.setItem(AUDIO_KEY, '1');
+    setAudioUI(saved === null ? true : saved === '1');
 
     audioToggle.addEventListener('click', () => {
       const next = audioToggle.dataset.on !== '1';
@@ -462,23 +506,6 @@
 
     // Player state
     const player = { x: 0, y: 0, vy: 0, tilt: 0 };
-
-    const world = {
-      started: false,
-      over: false,
-      survive: 0,
-
-      baseSpeed: 180,
-      speedGain: 2,
-      speed: 180,
-
-      groundPad: 22,
-      topPad: 22,
-
-      distAcc: 0,
-      nextSpawnDist: 620,
-      obstacles: []
-    };
 
     // Vertical response (speed-adaptive)
     const G = 3600;
@@ -739,7 +766,6 @@
         ctx.restore();
       }
 
-      // Debug collision ellipse (OFF by default)
       if (SHOW_COLLISION_DEBUG) {
         const a = Math.max(8 * dpr, (drawW * COLL_A_FRAC));
         const b = Math.max(6 * dpr, (drawH * COLL_B_FRAC));
@@ -862,8 +888,7 @@
             ) { gameOver(); break; }
           } else {
             if (ellipseRectHit(cx, cy, a, b, collTheta, ob.x, ob.y, ob.w, ob.h)) {
-              gameOver(); break;
-            }
+              gameOver(); break; }
           }
         }
       } else {
@@ -898,5 +923,3 @@
   </script>
 </body>
 </html>
-
-
