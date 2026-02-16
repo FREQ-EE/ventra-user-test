@@ -87,7 +87,8 @@
       transition: border-color 120ms ease, color 120ms ease;
     }
     .iconBtn:hover{ border-color:var(--accentA); color:var(--text); }
-    .iconBtn svg{ width:18px; height:18px; display:block; }
+    .iconBtn svg{ width:18px; height:18px; }
+    .iconBtn svg{ pointer-events:none; }
     .iconOn, .iconOff{ display:none; }
     .iconBtn[data-on="1"] .iconOn{ display:block; }
     .iconBtn[data-on="0"] .iconOff{ display:block; }
@@ -164,12 +165,11 @@
     <header>
       <div>
         <h1>VENTRA · SIDE-SCROLLER</h1>
-        <p class="sub">Primary: three breath pulses. Backup: Space or click. No device: hold ↑ to simulate.</p>
       </div>
 
       <div class="row" aria-label="Status">
         <span class="pill pillButton" id="ventraPill" title="Click to enable WebMIDI">Ventra: click to enable</span>
-        <span class="pill pillStrong" id="ccPill">CC2: 000</span>
+        <span class="pill" id="ccPill">CC2: 000</span>
 
         <button class="iconBtn" id="audioToggle" type="button" data-on="0" aria-label="Toggle music" title="Toggle music">
           <!-- Speaker ON -->
@@ -874,3 +874,4 @@
   </script>
 </body>
 </html>
+
