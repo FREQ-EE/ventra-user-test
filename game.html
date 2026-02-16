@@ -34,7 +34,7 @@
     }
 
     .wrap{ max-width:980px; margin:0 auto; padding:18px 18px 28px; display:grid; gap:14px; }
-    header{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+    header{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
 
     h1{
       margin:0;
@@ -47,24 +47,10 @@
     }
     .sub{ margin:0; color:var(--muted); font-size:12px; }
 
-    .card{
-      background:var(--card);
-      border:1px solid var(--border);
-      border-radius:14px;
-      padding:14px;
-    }
     .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
 
-    button, select{ font:inherit; color:inherit; }
-    button, select{
-      background:rgba(0,0,0,0.12);
-      border:1px solid var(--border);
-      border-radius:10px;
-      padding:8px 10px;
-      cursor:pointer;
-    }
-    button:hover{ border-color:var(--accentA); }
-    button:disabled{ opacity:0.55; cursor:not-allowed; }
+    a{ color:inherit; text-decoration:none; }
+    a:hover{ text-decoration:underline; }
 
     .pill{
       display:inline-flex; align-items:center; justify-content:center;
@@ -76,19 +62,35 @@
       color:var(--muted);
       font-variant-numeric:tabular-nums;
       white-space:nowrap;
+      user-select:none;
     }
+    .pillStrong{ color:var(--text); }
+
+    .pillButton{
+      cursor:pointer;
+      transition: border-color 120ms ease;
+    }
+    .pillButton:hover{ border-color:var(--accentA); }
+
     #ccPill { min-width: 86px; justify-content: center; }
 
-    .status{
-      padding:8px 10px;
+    /* Small icon button in pill form */
+    button{ font:inherit; color:inherit; }
+    .iconBtn{
       border:1px solid var(--border);
-      border-radius:10px;
+      border-radius:999px;
       background:rgba(0,0,0,0.10);
-      font-size:12px;
+      padding:6px 10px;
+      cursor:pointer;
+      display:inline-flex; align-items:center; gap:8px;
       color:var(--muted);
-      font-variant-numeric:tabular-nums;
+      transition: border-color 120ms ease, color 120ms ease;
     }
-    .small{ font-size:12px; color:var(--muted); }
+    .iconBtn:hover{ border-color:var(--accentA); color:var(--text); }
+    .iconBtn svg{ width:18px; height:18px; display:block; }
+    .iconOn, .iconOff{ display:none; }
+    .iconBtn[data-on="1"] .iconOn{ display:block; }
+    .iconBtn[data-on="0"] .iconOff{ display:block; }
 
     /* Game */
     .gameShell{
@@ -162,32 +164,27 @@
     <header>
       <div>
         <h1>VENTRA · SIDE-SCROLLER</h1>
-        <p class="sub">Primary: three breath pulses. Backup: Space or click.</p>
+        <p class="sub">Primary: three breath pulses. Backup: Space or click. No device: hold ↑ to simulate.</p>
       </div>
 
-      <div class="row">
-        <span class="pill" id="midiPill">MIDI: not enabled</span>
-        <span class="pill" id="inputPill">Input: —</span>
-        <span class="pill" id="ccPill">CC2: 000</span>
+      <div class="row" aria-label="Status">
+        <span class="pill pillButton" id="ventraPill" title="Click to enable WebMIDI">Ventra: click to enable</span>
+        <span class="pill pillStrong" id="ccPill">CC2: 000</span>
+
+        <button class="iconBtn" id="audioToggle" type="button" data-on="0" aria-label="Toggle music" title="Toggle music">
+          <!-- Speaker ON -->
+          <svg class="iconOn" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M3 10v4h4l5 4V6L7 10H3zm13.5 2a3.5 3.5 0 0 0-1.5-2.9v5.8A3.5 3.5 0 0 0 16.5 12zm0-7a1 1 0 0 0-.7 1.7A8 8 0 0 1 18 12a8 8 0 0 1-2.2 5.3 1 1 0 1 0 1.4 1.4A10 10 0 0 0 20 12a10 10 0 0 0-2.8-6.7 1 1 0 0 0-.7-.3z"/>
+          </svg>
+          <!-- Speaker OFF -->
+          <svg class="iconOff" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+            <path fill="currentColor" d="M3 10v4h4l5 4V6L7 10H3zm13.1 2 2.8 2.8 1.4-1.4L17.5 10.6l2.8-2.8-1.4-1.4L16.1 9.2l-2.8-2.8-1.4 1.4 2.8 2.8-2.8 2.8 1.4 1.4L16.1 12z"/>
+          </svg>
+        </button>
+
+        <span class="pill"><a href="./index.html" title="Back to instructions & feedback">Back</a></span>
       </div>
     </header>
-
-    <div class="card">
-      <div class="row" style="justify-content: space-between;">
-        <div class="row">
-          <button id="btnEnable" type="button">Enable MIDI</button>
-
-          <label class="small">
-            Input:
-            <select id="selInput" disabled></select>
-          </label>
-        </div>
-
-        <div class="row">
-          <span class="status" id="status">Click “Enable MIDI”, then select “Ventra” if needed.</span>
-        </div>
-      </div>
-    </div>
 
     <div class="gameShell" aria-label="Ventra game">
       <div class="hud">
@@ -210,6 +207,11 @@
     </div>
   </div>
 
+  <!-- Music placeholder:
+       Browsers do not reliably play .mid directly.
+       Replace src with a rendered audio file (mp3/ogg) when ready. -->
+  <audio id="bgm" src="./music.mp3" loop preload="auto"></audio>
+
   <script>
     'use strict';
 
@@ -221,12 +223,12 @@
     // ============================================================
     // Debug toggles
     // ============================================================
-    const SHOW_COLLISION_DEBUG = true;      // set false when done tuning
-    const COLL_FOLLOWS_SPRITE_TILT = true;  // collision ellipse rotates with sprite tilt
-    const DEBUG_COLL_COLOUR = '#00FFFF';    // cyan (standout)
+    const SHOW_COLLISION_DEBUG = false;     // <- OFF
+    const COLL_FOLLOWS_SPRITE_TILT = true;
+    const DEBUG_COLL_COLOUR = '#00FFFF';
 
     // ============================================================
-    // Asset: monkey SVG loaded as image (same folder as index.html)
+    // Asset: monkey SVG loaded as image (same folder as game.html)
     // ============================================================
     const monkeyImg = new Image();
     let monkeyReady = false;
@@ -235,117 +237,132 @@
     monkeyImg.src = './monkey.svg';
 
     // Visual size (in CSS pixels mapped into canvas pixels by DPR)
-    // This is independent of collision size.
     const MONKEY_DRAW_W = 150;
     const MONKEY_DRAW_H = 150;
 
-    // Ellipse collision parameters (in canvas pixels, scaled by DPR during draw/update)
-    // Rotation anticlockwise (~35°).
+    // Collision parameters
     const COLL_ROT_DEG = -24;
     const COLL_ROT = (COLL_ROT_DEG * Math.PI) / 180;
-
-    // Ellipse radii relative to draw size
-    // a = semi-major, b = semi-minor
     const COLL_A_FRAC = 0.40;
     const COLL_B_FRAC = 0.15;
-
-    // ------------------------------------------------------------
-    // NEW: Collision centre offset (fractions of draw size)
-    // +X => right, -X => left
-    // +Y => down,  -Y => up
-    // Start at 0, then tune in small increments (e.g. 0.02).
-    // ------------------------------------------------------------
     const COLL_CX_OFF_FRAC = 0.05;
     const COLL_CY_OFF_FRAC = 0.03;
 
     // ============================================================
-    // WebMIDI (Channel 1, CC2)
+    // WebMIDI (Channel 1, CC2) - Ventra auto attach
     // ============================================================
     const targetChannel1Based = 1;
     const targetCC = 2;
 
-    const btnEnable = document.getElementById('btnEnable');
-    const selInput  = document.getElementById('selInput');
-    const statusEl  = document.getElementById('status');
-
-    const midiPill = document.getElementById('midiPill');
-    const inputPill = document.getElementById('inputPill');
+    const ventraPill = document.getElementById('ventraPill');
     const ccPill = document.getElementById('ccPill');
 
     let midiAccess = null;
     let currentInput = null;
 
-    function setStatus(msg) { statusEl.textContent = msg; }
+    function setVentraPill(text, clickable) {
+      ventraPill.textContent = text;
+      ventraPill.title = clickable ? 'Click to enable WebMIDI' : '';
+      ventraPill.classList.toggle('pillButton', !!clickable);
+    }
 
     function detachCurrentInput() {
       if (currentInput) currentInput.onmidimessage = null;
       currentInput = null;
     }
 
-    function attachInputById(id) {
-      detachCurrentInput();
-      const input = midiAccess.inputs.get(id);
-
-      if (!input) {
-        setStatus('Selected input not available.');
-        inputPill.textContent = 'Input: —';
-        return;
-      }
-
-      currentInput = input;
-      currentInput.onmidimessage = onMIDIMessage;
-
-      setStatus(`Listening: ${input.name || 'Unnamed device'}`);
-      inputPill.textContent = `Input: ${input.name || 'Unnamed'}`;
+    function findVentraInput() {
+      if (!midiAccess) return null;
+      const inputs = Array.from(midiAccess.inputs.values());
+      const byName = inputs.find(i => (i.name || '').toLowerCase().includes('ventra'));
+      return byName || null;
     }
 
-    function refreshInputList() {
-      const prevId = selInput.value;
-      selInput.innerHTML = '';
-
-      const inputs = Array.from(midiAccess.inputs.values());
-      if (inputs.length === 0) {
-        selInput.disabled = true;
-        setStatus('No MIDI inputs detected.');
-        inputPill.textContent = 'Input: —';
-        return;
+    function attachVentraIfPresent() {
+      detachCurrentInput();
+      const input = findVentraInput();
+      if (!input) {
+        setVentraPill('Ventra: not connected', false);
+        return false;
       }
-
-      for (const input of inputs) {
-        const opt = document.createElement('option');
-        opt.value = input.id;
-        opt.textContent = `${input.name || 'Unnamed'}${input.manufacturer ? ' — ' + input.manufacturer : ''}`;
-        selInput.appendChild(opt);
-      }
-
-      selInput.disabled = false;
-      const nextId = inputs.some(i => i.id === prevId) ? prevId : inputs[0].id;
-      selInput.value = nextId;
-      attachInputById(nextId);
+      currentInput = input;
+      currentInput.onmidimessage = onMIDIMessage;
+      setVentraPill('Ventra: connected', false);
+      return true;
     }
 
     async function enableMIDI() {
       if (!('requestMIDIAccess' in navigator)) {
-        setStatus('Web MIDI API not supported in this browser.');
-        midiPill.textContent = 'MIDI: unsupported';
+        setVentraPill('Ventra: unsupported', false);
         return;
       }
 
       try {
         midiAccess = await navigator.requestMIDIAccess({ sysex: false });
-        setStatus('MIDI enabled. Enumerating inputs…');
-        midiPill.textContent = 'MIDI: enabled';
-        refreshInputList();
-        midiAccess.onstatechange = () => refreshInputList();
+        // Attempt immediate attach
+        attachVentraIfPresent();
+
+        // Watch hot-plug
+        midiAccess.onstatechange = () => {
+          // If already attached and still present, keep.
+          // Otherwise re-scan and attach when Ventra appears.
+          const want = findVentraInput();
+          const have = currentInput && want && currentInput.id === want.id;
+          if (!have) attachVentraIfPresent();
+        };
       } catch (err) {
-        setStatus('MIDI access denied or unavailable.');
-        midiPill.textContent = 'MIDI: denied';
         console.error(err);
+        setVentraPill('Ventra: permission denied', true);
       }
     }
 
-    btnEnable.addEventListener('click', enableMIDI);
-    selInput.addEventListener('change', () => { if (midiAccess) attachInputById(selInput.value); });
+    // WebMIDI generally requires a user gesture: we use the pill as the gesture target.
+    ventraPill.addEventListener('click', () => {
+      if (!midiAccess) enableMIDI();
+    });
+
+    // Initial UI state
+    setVentraPill('Ventra: click to enable', true);
+
+    // ============================================================
+    // Music toggle (simple audio loop)
+    // ============================================================
+    const audioToggle = document.getElementById('audioToggle');
+    const bgm = document.getElementById('bgm');
+    const AUDIO_KEY = 'ventra_game_music';
+
+    function setAudioUI(on) {
+      audioToggle.dataset.on = on ? '1' : '0';
+    }
+
+    async function setAudio(on) {
+      localStorage.setItem(AUDIO_KEY, on ? '1' : '0');
+      setAudioUI(on);
+
+      if (!bgm) return;
+
+      if (on) {
+        try {
+          await bgm.play();
+        } catch (e) {
+          // Autoplay may be blocked; user can click again.
+          console.warn('Audio play blocked:', e);
+          setAudioUI(false);
+          localStorage.setItem(AUDIO_KEY, '0');
+        }
+      } else {
+        bgm.pause();
+        bgm.currentTime = 0;
+      }
+    }
+
+    // restore preference (does not auto-play reliably due to gesture rules)
+    setAudioUI(localStorage.getItem(AUDIO_KEY) === '1');
+
+    audioToggle.addEventListener('click', () => {
+      const next = audioToggle.dataset.on !== '1';
+      setAudio(next);
+    });
 
     // ============================================================
     // Game
@@ -422,7 +439,7 @@
       return { w, h };
     }
 
-    // Player state (position in canvas pixels)
+    // Player state
     const player = { x: 0, y: 0, vy: 0, tilt: 0 };
 
     const world = {
@@ -539,7 +556,7 @@
       }
     }
 
-    // Ellipse collision against axis-aligned rectangle, with ellipse rotated anticlockwise by theta.
+    // Ellipse collision against axis-aligned rectangle, with ellipse rotated by theta.
     function ellipseRectHit(cx, cy, a, b, theta, rx, ry, rw, rh) {
       const cosT = Math.cos(-theta);
       const sinT = Math.sin(-theta);
@@ -632,6 +649,7 @@
       ctx.clearRect(0, 0, w, h);
 
       const groundY = h - world.groundPad;
+      const ceilingY = world.topPad;
 
       const border = cssVar('--border');
       const accentA = cssVar('--accentA');
@@ -698,7 +716,7 @@
         ctx.restore();
       }
 
-      // Debug: draw collision ellipse overlay (with centre offset)
+      // Debug collision ellipse (OFF by default)
       if (SHOW_COLLISION_DEBUG) {
         const a = Math.max(8 * dpr, (drawW * COLL_A_FRAC));
         const b = Math.max(6 * dpr, (drawH * COLL_B_FRAC));
@@ -720,7 +738,6 @@
     // Keyboard + click
     window.addEventListener('keydown', (e) => {
       if (e.code === 'ArrowUp') simulateKey = true;
-
       if (e.code === 'Space') {
         e.preventDefault();
         backupStartOrRestart();
@@ -738,8 +755,8 @@
       const dt = Math.min(0.033, Math.max(0.001, (ts - (lastTs || ts)) / 1000));
       lastTs = ts;
 
+      // Sim fallback: only when user holds ↑
       if (simulateKey) setCC2(90);
-      else if (!midiAccess) setCC2(0);
 
       registerPulse(dt);
 
@@ -774,7 +791,6 @@
         player.vy = clamp(player.vy, -VTERM * dpr, VTERM * dpr);
         player.y += player.vy * dt;
 
-        // Tilt derived from current vertical velocity (shared by sprite + collision)
         player.tilt = clamp(-player.vy / (900 * dpr), -0.20, 0.20);
 
         const floorY = groundY - 14 * dpr;
@@ -804,7 +820,7 @@
           world.obstacles.shift();
         }
 
-        // Collision: rotated ellipse, with centre offset, optionally following sprite tilt
+        // Collision
         const drawW = MONKEY_DRAW_W * dpr;
         const drawH = MONKEY_DRAW_H * dpr;
         const a = Math.max(8 * dpr, (drawW * COLL_A_FRAC));
@@ -827,7 +843,6 @@
           }
         }
       } else {
-        // Keep tilt stable when not running
         player.tilt = 0;
       }
 
@@ -854,10 +869,7 @@
 
     // Boot
     resetGame();
-    midiPill.textContent = 'MIDI: not enabled';
-    inputPill.textContent = 'Input: —';
     setCC2(0);
-    setStatus('Click “Enable MIDI”, then select “Ventra” if needed.');
     requestAnimationFrame(step);
   </script>
 </body>
