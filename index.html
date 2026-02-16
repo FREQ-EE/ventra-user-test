@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en-GB">
+<html lang="en-GB" data-theme="dark">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -7,6 +7,7 @@
   <title>Ventra Field Test — Instructions & Feedback</title>
   <style>
     :root {
+      /* DARK (default) */
       --bg: #0b0d10;
       --card: #12161c;
       --text: #e7eef6;
@@ -14,15 +15,31 @@
       --accent: #ec4899;
       --accent-grad: linear-gradient(90deg, #a855f7 0%, #ec4899 45%, #fb7185 100%);
       --border: #243041;
-      --ok: #86efac;
-      --warn: #fde68a;
-      --bad: #fca5a5;
+
       --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
       --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
     }
+
+    /* LIGHT */
+    html[data-theme="light"] {
+      --bg: #f7f8fb;
+      --card: #ffffff;
+      --text: #0b0d10;
+      --muted: #4b5563;
+      --border: #e5e7eb;
+
+      /* Keep the same accent gradient for brand continuity */
+      --accent: #ec4899;
+      --accent-grad: linear-gradient(90deg, #a855f7 0%, #ec4899 45%, #fb7185 100%);
+    }
+
     html, body { background: var(--bg); color: var(--text); font-family: var(--sans); margin: 0; }
     .wrap { max-width: 920px; margin: 0 auto; padding: 24px 16px 64px; }
+
     header { padding: 8px 0 18px; }
+    .topbar { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .headcopy { flex: 1 1 auto; min-width: 0; }
+
     h1 { font-size: 26px; margin: 0 0 6px; }
     @supports ((-webkit-background-clip: text) or (background-clip: text)) {
       h1 {
@@ -32,23 +49,21 @@
         color: transparent;
       }
     }
+
     p { line-height: 1.5; color: var(--muted); margin: 8px 0; }
     .card { background: var(--card); border: 1px solid var(--border); border-radius: 14px; padding: 16px; margin: 12px 0; }
     h2 { font-size: 18px; margin: 0 0 10px; color: var(--text); }
+
     ul, ol { margin: 8px 0 8px 12px; padding-left: 12px; color: var(--muted); line-height: 1.5; }
     li { margin: 6px 0; padding-left: 2px; }
     code { font-family: var(--mono); font-size: 0.95em; color: var(--text); }
-    .pill { display: inline-block; padding: 2px 10px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); font-size: 12px; }
-    .grid { display: block; }
+
     .note { border-left: 3px solid transparent; border-image: var(--accent-grad) 1; padding-left: 12px; }
-    .kpi { display: grid; gap: 10px; grid-template-columns: 1fr; }
-    @media (min-width: 640px) { .kpi { grid-template-columns: 1fr 1fr 1fr; } }
-    .kpi .box { background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
-    .kpi .label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-    .kpi .value { font-size: 14px; color: var(--text); }
     .divider { height: 1px; background: var(--border); margin: 14px 0; }
-    .iframe-wrap { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: #0a0c0f; }
+
+    .iframe-wrap { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: transparent; }
     footer { margin-top: 18px; color: var(--muted); font-size: 12px; }
+
     a { color: var(--accent); text-decoration: none; }
     @supports ((-webkit-background-clip: text) or (background-clip: text)) {
       a {
@@ -59,16 +74,53 @@
       }
     }
     a:hover { text-decoration: underline; }
+
+    /* Theme toggle */
+    .theme-btn {
+      flex: 0 0 auto;
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      background: color-mix(in oklab, var(--card) 85%, transparent);
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .theme-btn:focus { outline: 2px solid color-mix(in oklab, var(--accent) 55%, transparent); outline-offset: 2px; }
+    .theme-btn svg { width: 22px; height: 22px; display: block; }
+    .icon-sun, .icon-moon { display: none; }
+    html[data-theme="dark"] .icon-moon { display: block; }
+    html[data-theme="light"] .icon-sun { display: block; }
   </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-<h1>Ventra Field Test: Instructions & Feedback</h1>
-      <p>
-        Please use Ventra naturally in your usual music workflow. When you have formed an opinion (or within <strong>7 days</strong>),
-        complete the survey below. If you discover issues later, you may submit again.
-      </p>
+      <div class="topbar">
+        <div class="headcopy">
+          <h1>Ventra Field Test: Instructions & Feedback</h1>
+          <p>
+            Please use Ventra naturally in your usual music workflow. When you have formed an opinion (or within <strong>7 days</strong>),
+            complete the survey below. If you discover issues later, you may submit again.
+          </p>
+        </div>
+
+        <button class="theme-btn" id="themeToggle" type="button" aria-label="Toggle light/dark mode" title="Toggle light/dark mode">
+          <!-- light theme icon (sun / SVG_NO_HEAR) -->
+          <svg class="icon-sun" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true" focusable="false">
+            <path fill="currentColor" fill-rule="nonzero" d="m500 706.78q-67.686 0-119.01-17.851-51.322-17.851-79.959-49.835-28.636-31.983-28.636-74.38 0-20.455 6.3223-37.934 6.3223-17.479 12.459-32.913 6.1364-15.434 6.1364-29.938 0-19.339-8.9256-45.558-8.9256-26.219-8.9256-50.021 0-27.149 13.202-48.905 13.202-21.756 35.517-34.773 22.314-13.017 49.835-13.017 23.43 0 42.769 8.3678 19.339 8.3678 34.959 17.293 17.479 9.6694 26.777 13.202 9.2975 3.5331 17.479 3.5331 7.8099 0 17.293-3.5331 9.4835-3.5331 26.963-13.202 15.992-8.9256 35.145-17.293 19.153-8.3678 42.583-8.3678 27.521 0 49.835 13.017 22.314 13.017 35.517 34.773 13.202 21.756 13.202 48.905 0 15.62-4.4628 33.099-4.4628 17.479-8.9256 33.657-4.4628 16.178-4.4628 28.822 0 14.504 6.3223 29.938 6.3223 15.434 12.459 32.913 6.1364 17.479 6.1364 37.934 0 42.397-28.45 74.38-28.45 31.983-79.773 49.835t-119.38 17.851zm-290.08 161.4q-44.628 0-80.888-20.455-36.26-20.455-57.645-55.413-21.384-34.959-21.384-78.099 0-31.612 8.3678-61.364 8.3678-29.752 19.525-55.971 11.157-26.219 19.525-47.603 8.3678-21.384 8.3678-36.632 0-9.2975-5.7645-26.033-5.7645-16.736-5.7645-33.471 0-35.331 12.831-62.851t34.959-43.512q22.128-15.992 50.393-15.992 26.405 0 43.698 14.132 17.293 14.132 17.293 35.331 0 18.223-6.5083 35.145-6.5083 16.921-6.5083 37.748 0 20.455 6.5083 37.934 6.5083 17.479 6.5083 34.959 0 29.008-12.087 50.579-12.087 21.57-28.079 39.05-15.992 17.479-28.079 34.401t-12.087 36.26q0 17.479 10.971 29.194 10.971 11.715 26.963 11.715 14.876 0 28.45-9.1116 13.574-9.1116 30.682-30.682l18.967 23.802q-20.455 24.174-38.678 34.959-18.223 10.785-39.421 10.785-29.38 0-49.091-20.269-19.711-20.269-19.711-50.393 0-24.545 12.273-44.256 12.273-19.711 28.079-37.562 15.806-17.851 28.079-36.818 12.273-18.967 12.273-41.653 0-12.273-6.5083-31.798-6.5083-19.525-6.5083-41.095 0-21.942 6.5083-41.653 6.5083-19.711 6.5083-31.24 0-8.9256-8.1818-14.318t-22.314-5.3926q-29.752 0-48.533 25.847-18.781 25.847-18.781 66.756 0 11.901 5.7645 29.194 5.7645 17.293 5.7645 30.31 0 20.083-8.3678 43.326-8.3678 23.244-19.525 48.905-11.157 25.661-19.525 53.182-8.3678 27.521-8.3678 56.157 0 34.587 17.293 62.665 17.293 28.079 46.674 44.814 29.38 16.736 65.083 16.736 44.256 0 84.05-25.661 39.793-25.661 66.942-71.777l26.033 14.504q-32.355 54.298-78.099 83.492-45.744 29.194-98.926 29.194zm290.08-86.653q-118.64 0-196.36-46.488-77.727-46.488-107.85-134.26l22.314-27.521q24.174 87.397 95.207 132.95 71.033 45.558 186.69 45.558 115.66 0 186.88-45.558 71.219-45.558 95.021-132.95l22.314 27.521q-30.124 87.769-107.85 134.26-77.727 46.488-196.36 46.488zm0-149.5q-31.24 0-58.388-7.438-27.149-7.438-43.884-19.339-16.736-11.901-16.736-24.917 0-17.479 30.868-26.963 30.868-9.4835 88.14-9.4835 56.901 0 88.14 9.4835 31.24 9.4835 31.24 26.963 0 13.017-16.736 24.917-16.736 11.901-43.884 19.339t-58.76 7.438zm-99.298-161.4q-14.504 0-24.731-12.459-10.227-12.459-10.227-29.566 0-17.479 10.227-29.566 10.227-12.087 24.731-12.087 14.132 0 24.36 12.087 10.227 12.087 10.227 29.566 0 17.107-10.227 29.566-10.227 12.459-24.36 12.459zm99.298 45q-10.785 0-20.64-7.9959-9.8554-7.9959-9.8554-16.55 0-12.645 30.496-12.645 30.496 0 30.496 12.645 0 8.5537-9.8554 16.55-9.8554 7.9959-20.64 7.9959zm0 161.4q58.76 0 102.83-14.132 44.07-14.132 68.616-39.421 24.545-25.289 24.545-58.76 0-18.223-6.1364-33.285t-12.459-31.054q-6.3223-15.992-6.3223-36.446 0-23.802 8.9256-48.905 8.9256-25.103 8.9256-46.674 0-28.636-19.153-47.789-19.153-19.153-47.789-19.153-16.736 0-31.426 6.3223t-28.822 14.504q-14.504 8.1818-29.38 14.876-14.876 6.6942-32.355 6.6942-17.107 0-31.983-6.6942-14.876-6.6942-29.38-14.876-14.132-8.1818-29.008-14.504-14.876-6.3223-31.612-6.3223-28.264 0-47.603 19.153-19.339 19.153-19.339 47.789 0 21.57 8.9256 46.674 8.9256 25.103 8.9256 48.905 0 20.455-6.1364 36.446-6.1364 15.992-12.459 31.054-6.3223 15.062-6.3223 33.285 0 33.471 24.545 58.76 24.545 25.289 68.802 39.421 44.256 14.132 102.64 14.132zm99.298-206.4q-14.132 0-24.36-12.459-10.227-12.459-10.227-29.566 0-17.479 10.227-29.566 10.227-12.087 24.36-12.087 14.504 0 24.731 12.087 10.227 12.087 10.227 29.566 0 17.107-10.227 29.566-10.227 12.459-24.731 12.459zm190.79 397.56q-53.182 0-98.926-29.194-45.744-29.194-77.727-83.492l25.661-14.504q27.521 46.116 67.314 71.777 39.793 25.661 83.678 25.661 36.074 0 65.455-16.736 29.38-16.736 46.674-44.814 17.293-28.079 17.293-62.665 0-28.636-8.3678-56.157-8.3678-27.521-19.525-53.182-11.157-25.661-19.525-48.905t-8.3678-43.326q0-13.017 5.7645-30.31 5.7645-17.293 5.7645-29.194 0-40.909-18.967-66.756-18.967-25.847-48.719-25.847-13.76 0-21.942 5.3926t-8.1818 14.318q0 11.529 6.5083 31.24 6.5083 19.711 6.5083 41.653 0 21.57-6.5083 41.095-6.5083 19.525-6.5083 31.798 0 22.686 12.087 41.653 12.087 18.967 28.079 36.818 15.992 17.851 28.079 37.562 12.087 19.711 12.087 44.256 0 30.124-19.711 50.393-19.711 20.269-49.091 20.269-21.198 0-39.607-10.971-18.409-10.971-38.12-34.773l18.595-23.802q17.107 21.57 30.682 30.682 13.574 9.1116 28.45 9.1116 16.364 0 27.335-11.715 10.971-11.715 10.971-29.194 0-19.339-12.273-36.26-12.273-16.921-28.079-34.401-15.806-17.479-28.079-39.05-12.273-21.57-12.273-50.579 0-17.479 6.5083-34.959 6.5083-17.479 6.5083-37.934 0-20.826-6.5083-37.748-6.5083-16.921-6.5083-35.145 0-21.198 17.479-35.331 17.479-14.132 43.512-14.132 28.264 0 50.393 15.806 22.128 15.806 34.959 43.512 12.831 27.707 12.831 63.037 0 16.736-5.7645 33.471-5.7645 16.736-5.7645 26.033 0 15.248 8.3678 36.632 8.3678 21.384 19.525 47.603 11.157 26.219 19.525 55.971 8.3678 29.752 8.3678 61.364 0 43.14-21.384 78.099-21.384 34.959-57.459 55.413-36.074 20.455-81.074 20.455zm-565.29-513.22-26.777-14.132q25.289-65.083 70.103-111.76 44.814-46.674 104.13-71.963 59.318-25.289 127.75-25.289 68.802 0 128.12 25.103 59.318 25.103 104.13 71.963 44.814 46.86 69.731 111.94l-26.405 14.132q-22.314-60.248-63.223-103.57-40.909-43.326-95.021-66.57-54.112-23.244-117.33-23.244-62.851 0-117.15 23.244-54.298 23.244-95.021 66.57-40.723 43.326-63.037 103.57z"/>
+          </svg>
+
+          <!-- dark theme icon (moon / SVG_NO_SEE) -->
+          <svg class="icon-moon" viewBox="0 0 1000 1000" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden="true" focusable="false">
+            <path fill="currentColor" fill-rule="nonzero" d="m114.55 535.41q-11.803-12.91-17.336-29.877-5.5328-16.967-5.5328-34.672 0-43.525 29.139-72.295 29.139-28.77 71.557-31.352 20.287-69.344 64.549-121.72 44.262-52.377 106.6-81.516t136.48-29.139q74.508 0 136.66 29.139t106.6 81.516q44.447 52.377 64.365 121.72 42.418 2.582 71.557 31.352 29.139 28.77 29.139 72.295 0 17.705-5.5328 34.672t-17.336 29.877l-18.074-23.975q5.9016-7.377 8.668-18.258 2.7664-10.881 2.7664-22.316 0-33.934-22.316-55.143-22.316-21.209-55.143-21.209h-16.598q-16.23-70.082-56.25-121.72-40.02-51.639-98.484-80.041-58.463-28.402-130.02-28.402-71.189 0-129.84 28.402-58.648 28.402-98.668 80.041-40.02 51.639-56.25 121.72h-16.598q-32.459 0-54.959 21.209-22.5 21.209-22.5 55.143 0 11.434 2.7664 22.316 2.7664 10.881 8.668 18.258zm94.426 329.75q-48.32 0-84.098-21.393-35.779-21.393-55.328-60.676-19.549-39.283-19.549-92.766 0-37.623 11.066-74.139t35.41-76.721q24.344-40.205 63.443-89.262l7.377-9.2213q34.672-43.156 61.414-72.295 26.742-29.139 48.32-46.66 21.578-17.52 40.389-25.082 18.811-7.5615 37.623-7.5615 14.385 0 25.082 7.1926 10.697 7.1926 10.697 20.84 0 3.6885-0.36885 4.7951 2.9508-0.36885 9.7746-0.7377 6.8238-0.36885 12.725-0.36885 23.238 0 43.34 11.066 20.102 11.066 32.643 32.459 12.541 21.393 12.541 52.008 0 26.189-10.881 47.398-10.881 21.209-32.275 37.07-21.393 15.861-52.746 25.82-28.402 9.2213-53.668 18.811-25.266 9.5902-55.881 21.762-60.492 24.344-92.213 53.852-31.721 29.508-31.721 63.443 0 17.705 10.512 28.955t27.111 11.25q14.385 0 28.402-8.8525 14.016-8.8525 29.877-28.77l19.549 22.869q-19.18 22.5-38.176 33.381-18.996 10.881-39.652 10.881-29.139 0-48.689-19.918-19.549-19.918-19.549-49.795 0-44.262 36.885-81.148 36.885-36.885 106.23-63.811 30.615-11.803 58.279-21.947 27.664-10.143 55.697-18.996 24.344-7.7459 40.758-18.996 16.414-11.25 24.529-26.557 8.1148-15.307 8.1148-34.488 0-29.508-16.783-46.844t-44.078-17.336q-13.648 0-24.529 3.873-10.881 3.873-19.734 7.7459-8.8525 3.873-16.967 3.873-12.91 0-12.91-10.697 0-6.6393 6.6393-12.172 6.6393-5.1639 13.279-10.697 6.6393-5.1639 6.6393-9.959 0-6.2705-14.385-6.2705-24.713 0-63.627 34.119t-92.766 103.46l-7.7459 9.959q-38.361 49.426-61.414 87.234-23.053 37.807-33.197 70.082-10.143 32.275-10.143 65.102 0 66.762 35.041 106.05 35.041 39.283 93.689 39.283 31.721 0 59.754-12.91 28.033-12.91 51.086-34.857 23.053-21.947 38.914-48.873l25.451 14.754q-20.287 34.672-48.135 59.754-27.848 25.082-60.123 38.361-32.275 13.279-66.947 13.279zm291.02-86.68q-114.34 0-189.59-42.234-75.246-42.234-109.18-124.49l23.238-19.549q57.541 156.76 275.53 156.76t275.53-156.76l23.238 19.549q-33.566 82.254-109 124.49-75.43 42.234-189.77 42.234zm0-68.238q-68.238 0-118.77-16.967-50.533-16.967-78.197-47.766t-27.664-72.48q0-4.0574 0.36885-8.668 0.36885-4.6107 1.4754-9.7746l34.303-10.697q-3.3197 10.328-4.6107 16.598-1.291 6.2705-1.291 12.541 0 49.057 52.746 78.381 52.746 29.324 141.64 29.324 88.893 0 141.64-29.324 52.746-29.324 52.746-78.381 0-6.2705-1.291-12.541-1.291-6.2705-4.6107-16.598l34.303 10.697q1.1066 5.1639 1.4754 9.7746 0.36885 4.6107 0.36885 8.668 0 41.68-27.664 72.48t-78.197 47.766q-50.533 16.967-118.77 16.967zm0-71.926q-30.984 0-57.91-7.377-26.926-7.377-43.525-19.18-16.598-11.803-16.598-24.713 0-17.336 30.615-26.742t87.418-9.4057 87.418 9.4057 30.615 26.742q0 12.91-16.598 24.713-16.598 11.803-43.34 19.18t-58.094 7.377zm0-107.34q-10.328 0-19.549-7.5615-9.2213-7.5615-9.2213-16.045 0-11.803 28.77-11.803 29.139 0 29.139 11.803 0 8.4836-9.2213 16.045-9.2213 7.5615-19.918 7.5615zm291.02 334.18q-34.303 0-66.762-13.279-32.459-13.279-60.123-38.361-27.664-25.082-48.32-59.754l25.451-14.754q15.861 26.926 38.914 48.873 23.053 21.947 51.27 34.857 28.217 12.91 59.57 12.91 58.648 0 93.689-39.283 35.041-39.283 35.041-106.05 0-32.828-10.143-65.102-10.143-32.275-33.197-70.082-23.053-37.807-61.414-87.234l-7.7459-9.959q-53.852-69.344-92.582-103.46t-63.811-34.119q-14.385 0-14.385 6.2705 0 4.7951 6.6393 9.959 6.6393 5.1639 13.279 10.697t6.6393 12.172q0 10.697-12.91 10.697-7.7459 0-16.783-3.873-9.0369-3.873-19.734-7.7459-10.697-3.873-24.713-3.873-26.926 0-43.893 17.336-16.967 17.336-16.967 46.844 0 19.18 8.1148 34.488 8.1148 15.307 24.529 26.557 16.414 11.25 40.758 18.996 28.033 8.8525 55.697 18.996 27.664 10.143 58.279 21.947 69.344 26.926 106.23 63.811 36.885 36.885 36.885 81.148 0 29.877-19.365 49.795-19.365 19.918-48.873 19.918-20.287 0-39.283-10.881-18.996-10.881-38.545-33.381l19.549-22.869q16.23 19.918 30.061 28.77 13.832 8.8525 28.217 8.8525 16.598 0 27.111-11.25 10.512-11.25 10.512-28.955 0-33.934-31.721-63.443-31.721-29.508-92.213-53.852-30.246-12.172-55.697-21.947-25.451-9.5902-53.852-18.811-31.352-9.959-52.746-25.82t-32.275-37.07q-10.881-21.209-10.881-47.398 0-30.615 12.91-52.008t33.566-32.459 43.525-11.066q6.2705 0 12.357 0.36885 6.0861 0.36885 8.668 0.7377-0.36885-1.1066-0.36885-4.7951 0-13.648 10.697-20.84 10.697-7.1926 25.082-7.1926 18.811 0 37.623 7.5615 18.811 7.5615 40.389 25.082 21.578 17.52 48.32 46.66 26.742 29.139 61.414 72.295l7.377 9.2213q39.467 49.057 63.627 89.262 24.16 40.205 35.225 76.721 11.066 36.516 11.066 74.139 0 53.484-19.549 92.766-19.549 39.283-55.143 60.676t-84.283 21.393zm-291.02-519.34q-33.934 0-57.541-6.8238-23.607-6.8238-41.68-13.463-18.074-6.6393-35.779-6.6393h-49.057q9.959-13.648 26.373-19.918 16.414-6.2705 36.332-6.2705 23.607 0 45.184 6.8238 21.578 6.8238 40.758 13.648 19.18 6.8238 35.41 6.8238 16.598 0 35.594-6.8238 18.996-6.8238 40.574-13.648 21.578-6.8238 45.184-6.8238 19.918 0 36.332 6.2705 16.414 6.2705 26.373 19.918h-49.057q-17.336 0-35.594 6.6393-18.258 6.6393-41.865 13.463-23.607 6.8238-57.541 6.8238z"/>
+          </svg>
+        </button>
+      </div>
     </header>
 
     <div class="card">
@@ -85,37 +137,45 @@
     </div>
 
     <div class="card">
-        <h2>Quick start</h2>
-        <ol>
-          <li>Plug Ventra into your computer via USB.</li>
-          <li>Open your DAW. Ventra will be registered automatically as a MIDI input device.</li>
-          <li>Attach either mouthpiece and play:
-            <ul>
-              <li><strong>Closed</strong> mouthpiece: no airflow (pressure builds up).</li>
-              <li><strong>Flow</strong> mouthpiece: vented airflow (air escapes).</li>
-            </ul>
-            The mouthpieces are interchangeable. If possible, please test <strong>both</strong> across your sessions.
-          </li>
-          <li>Load an instrument or synth plugin. Either use a patch that already responds to breath/expression, or use your DAW/plugin’s <em>MIDI learn</em> to map a parameter to Ventra’s breath control (CC2).</li>
-          <li>Play and confirm you have a smooth, usable control range from minimum to maximum breath.</li>
-        </ol>
-        <div class="divider"></div>
-        <p class="note"><strong>Technical:</strong> Ventra outputs breath pressure as MIDI <strong>Control Change CC2</strong> (<code>Breath Controller</code>). Map CC2 to any parameter (expression, volume, filter cutoff, etc.) as required.</p>
-      </div>
+      <h2>Quick start</h2>
+      <ol>
+        <li>Plug Ventra into your computer via USB.</li>
+        <li>Open your DAW. Ventra will be registered automatically as a MIDI input device.</li>
 
-      <div class="card">
-        <h2>Suggested usage (optional, but helpful)</h2>
-        <ul>
-          <li>Use Ventra across <strong>at least 2 sessions</strong> on different days if possible.</li>
-          <li>Please test <strong>both mouthpieces</strong> (Closed and Flow) if you can, and note which you prefer in the survey.</li>
-          <li>Try one context with <strong>long phrases</strong> (pads/strings/winds) and one with <strong>repeated attacks</strong>.</li>
-          <li>If practical, record a short clip (30–60 s) and keep it for reference.</li>
-        </ul>
-        <div class="divider"></div>
-        <p class="note">
-          If something goes wrong, describe what you were doing (DAW, patch, routing) and whether reconnecting fixed it.
-        </p>
-      </div>
+        <li>Assemble the mouthpiece (do not remove the tube from the device):
+          <ul>
+            <li>Choose a mouthpiece: <strong>Closed</strong>, <strong>Flow 2</strong> (2 vents), or <strong>Flow 3</strong> (3 vents).</li>
+            <li>Screw the <strong>PTFE filter</strong> into the mouthpiece.</li>
+            <li>Push the <strong>tube</strong> onto the other end of the PTFE filter.</li>
+            <li>You may swap mouthpieces by removing the mouthpiece/filter from the tube end and reassembling. The three mouthpieces are interchangeable.</li>
+          </ul>
+        </li>
+
+        <li>Load an instrument or synth plugin. Either use a patch that already responds to breath/expression, or use your DAW/plugin’s <em>MIDI learn</em> to map a parameter to Ventra’s breath control (CC2).</li>
+
+        <li>Play and confirm you have a smooth, usable control range from minimum to maximum breath.</li>
+      </ol>
+
+      <div class="divider"></div>
+      <p class="note">
+        Please test <strong>all three mouthpieces</strong> (Closed, Flow 2, Flow 3) if possible, and note your preference in the survey.
+      </p>
+      <p class="note"><strong>Technical:</strong> Ventra outputs breath pressure as MIDI <strong>Control Change CC2</strong> (<code>Breath Controller</code>). Map CC2 to any parameter (expression, volume, filter cutoff, etc.) as required.</p>
+    </div>
+
+    <div class="card">
+      <h2>Suggested usage (optional, but helpful)</h2>
+      <ul>
+        <li>Use Ventra across <strong>at least 2 sessions</strong> on different days if possible.</li>
+        <li>Please test <strong>Closed</strong>, <strong>Flow 2</strong>, and <strong>Flow 3</strong> if you can, and note which you prefer in the survey.</li>
+        <li>Try one context with <strong>long phrases</strong> (pads/strings/winds) and one with <strong>repeated attacks</strong>.</li>
+        <li>If practical, record a short clip (30–60 s) and keep it for reference.</li>
+      </ul>
+      <div class="divider"></div>
+      <p class="note">
+        If something goes wrong, describe what you were doing (DAW, patch, routing) and whether reconnecting fixed it.
+      </p>
+    </div>
 
     <div class="card">
       <h2>Troubleshooting (common)</h2>
@@ -155,8 +215,25 @@
   </div>
 
   <script>
-    // Optional: set the fallback link automatically if you paste a Google Forms iframe with a src URL.
-    // If you prefer, you can delete this script and hardcode the fallbackLink href.
+    // Theme: persisted toggle (defaults to dark)
+    (function () {
+      const root = document.documentElement;
+      const key = "ventra_theme";
+      const saved = localStorage.getItem(key);
+      if (saved === "light" || saved === "dark") root.setAttribute("data-theme", saved);
+
+      const btn = document.getElementById("themeToggle");
+      if (btn) {
+        btn.addEventListener("click", function () {
+          const cur = root.getAttribute("data-theme") === "light" ? "light" : "dark";
+          const next = cur === "light" ? "dark" : "light";
+          root.setAttribute("data-theme", next);
+          localStorage.setItem(key, next);
+        });
+      }
+    })();
+
+    // Keep fallback link aligned with iframe src (embedded view) if desired
     (function () {
       const wrap = document.getElementById('formWrap');
       const a = document.getElementById('fallbackLink');
