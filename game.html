@@ -210,7 +210,10 @@
   <!-- Music placeholder:
        Browsers do not reliably play .mid directly.
        Replace src with a rendered audio file (mp3/ogg) when ready. -->
-  <audio id="bgm" src="./music.mp3" loop preload="auto"></audio>
+  <audio id="bgm" loop preload="auto">
+  <source src="./music.ogg" type="audio/ogg">
+  <source src="./music.mp3" type="audio/mpeg">
+  </audio>
 
   <script>
     'use strict';
@@ -260,9 +263,9 @@
     let midiAccess = null;
     let currentInput = null;
 
-    function setVentraPill(text, clickable) {
+    function setVentraPill(text, clickable, title='') {
       ventraPill.textContent = text;
-      ventraPill.title = clickable ? 'Click to enable WebMIDI' : '';
+      ventraPill.title = title;
       ventraPill.classList.toggle('pillButton', !!clickable);
     }
 
@@ -282,7 +285,7 @@
       detachCurrentInput();
       const input = findVentraInput();
       if (!input) {
-        setVentraPill('Ventra: not connected', false);
+        setVentraPill('Ventra: not connected (click to retry)', true, 'Click to retry Ventra detection');
         return false;
       }
       currentInput = input;
@@ -319,18 +322,42 @@
     // WebMIDI generally requires a user gesture: we use the pill as the gesture target.
     ventraPill.addEventListener('click', () => {
       if (!midiAccess) enableMIDI();
+      else attachVentraIfPresent(); // retry scan/attach
     });
 
+
     // Initial UI state
-    setVentraPill('Ventra: click to enable', true);
+    setVentraPill('Ventra: click to enable', true, 'Click to enable WebMIDI');
 
     // ============================================================
     // Music toggle (simple audio loop)
     // ============================================================
+    
     const audioToggle = document.getElementById('audioToggle');
     const bgm = document.getElementById('bgm');
     const AUDIO_KEY = 'ventra_game_music';
 
+    function musicIsArmed() {
+      return audioToggle.dataset.on === '1';
+    }
+    
+    async function startMusicIfArmed() {
+      if (!bgm) return;
+      if (!musicIsArmed()) return;
+      try {
+        await bgm.play();
+      } catch (e) {
+        console.warn('Audio play failed:', e);
+        // Keep UI state; user may need another gesture depending on browser policy.
+      }
+    }
+    
+    function stopMusic() {
+      if (!bgm) return;
+      bgm.pause();
+      bgm.currentTime = 0;
+    }
+    
     function setAudioUI(on) {
       audioToggle.dataset.on = on ? '1' : '0';
     }
@@ -342,17 +369,11 @@
       if (!bgm) return;
 
       if (on) {
-        try {
-          await bgm.play();
-        } catch (e) {
-          // Autoplay may be blocked; user can click again.
-          console.warn('Audio play blocked:', e);
-          setAudioUI(false);
-          localStorage.setItem(AUDIO_KEY, '0');
-        }
+        // Do not start yet; start when the game starts.
+        // If game is already running, we can start immediately:
+        if (world && world.started) startMusicIfArmed();
       } else {
-        bgm.pause();
-        bgm.currentTime = 0;
+        stopMusic();
       }
     }
 
@@ -503,6 +524,7 @@
       world.over = false;
       overlay.style.display = 'none';
       resetPulses();
+      startMusicIfArmed();
     }
 
     function gameOver() {
@@ -514,6 +536,7 @@
         `Survived: <span class="kbd">${world.survive.toFixed(1)} s</span>. ` +
         `Restart with <span class="kbd">three breath pulses</span>, or <span class="kbd">Space</span>, or click.`;
       resetPulses();
+      stopMusic();
     }
 
     function spawnObstacle(w, h) {
@@ -757,6 +780,7 @@
 
       // Sim fallback: only when user holds ↑
       if (simulateKey) setCC2(90);
+      else if (!currentInput) setCC2(0);
 
       registerPulse(dt);
 
@@ -874,4 +898,5 @@
   </script>
 </body>
 </html>
+
 
