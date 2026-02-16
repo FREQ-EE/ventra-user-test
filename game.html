@@ -1,0 +1,864 @@
+<!doctype html>
+<html lang="en-GB">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Ventra · Side-scroller (WebMIDI)</title>
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+
+  <style>
+    :root { color-scheme: dark light; }
+
+    :root{
+      --bg:#0F1011; --card:#13151C; --text:#EDF4FA; --muted:#9AA4B2; --border:#262C3C;
+      --accentA:#8B5CF6; --accentB:#EC4899; --warn:#FFB86B; --danger:#FF6B6B;
+    }
+    @media (prefers-color-scheme: light){
+      :root{
+        --bg:#FFFFFF; --card:#FFFFFF; --text:#0B0D10; --muted:#556170; --border:#E5E7EB;
+        --accentA:#7C3AED; --accentB:#DB2777; --warn:#B86B00; --danger:#B42318;
+      }
+    }
+
+    html, body { height: 100%; }
+    body{
+      margin:0;
+      background:var(--bg);
+      color:var(--text);
+      font-family:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
+      line-height:1.35;
+    }
+
+    .wrap{ max-width:980px; margin:0 auto; padding:18px 18px 28px; display:grid; gap:14px; }
+    header{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+
+    h1{
+      margin:0;
+      font-family:"Orbitron", system-ui, sans-serif;
+      font-weight:900;
+      font-size:18px;
+      letter-spacing:0.02em;
+      background:linear-gradient(90deg, var(--accentA), var(--accentB));
+      -webkit-background-clip:text; background-clip:text; color:transparent;
+    }
+    .sub{ margin:0; color:var(--muted); font-size:12px; }
+
+    .card{
+      background:var(--card);
+      border:1px solid var(--border);
+      border-radius:14px;
+      padding:14px;
+    }
+    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+
+    button, select{ font:inherit; color:inherit; }
+    button, select{
+      background:rgba(0,0,0,0.12);
+      border:1px solid var(--border);
+      border-radius:10px;
+      padding:8px 10px;
+      cursor:pointer;
+    }
+    button:hover{ border-color:var(--accentA); }
+    button:disabled{ opacity:0.55; cursor:not-allowed; }
+
+    .pill{
+      display:inline-flex; align-items:center; justify-content:center;
+      padding:6px 10px;
+      border:1px solid var(--border);
+      border-radius:999px;
+      background:rgba(0,0,0,0.10);
+      font-size:12px;
+      color:var(--muted);
+      font-variant-numeric:tabular-nums;
+      white-space:nowrap;
+    }
+    #ccPill { min-width: 86px; justify-content: center; }
+
+    .status{
+      padding:8px 10px;
+      border:1px solid var(--border);
+      border-radius:10px;
+      background:rgba(0,0,0,0.10);
+      font-size:12px;
+      color:var(--muted);
+      font-variant-numeric:tabular-nums;
+    }
+    .small{ font-size:12px; color:var(--muted); }
+
+    /* Game */
+    .gameShell{
+      position:relative;
+      overflow:hidden;
+      border-radius:16px;
+      border:1px solid var(--border);
+      background:
+        radial-gradient(900px 320px at 10% 0%, rgba(139,92,246,0.18), transparent 70%),
+        radial-gradient(900px 320px at 90% 0%, rgba(236,72,153,0.15), transparent 70%),
+        linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.00));
+      height: 460px;
+    }
+
+    canvas{ display:block; width:100%; height:100%; }
+
+    .hud{
+      position:absolute; top:10px; left:10px; right:10px;
+      display:flex; justify-content:space-between; gap:10px;
+      pointer-events:none;
+      font-size:12px;
+      color:var(--muted);
+    }
+    .hudItem{
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--border);
+      background:rgba(0,0,0,0.10);
+      white-space:nowrap;
+      font-variant-numeric:tabular-nums;
+    }
+
+    .overlay{
+      position:absolute; inset:0;
+      display:grid; place-items:center;
+      pointer-events:none;
+      padding:18px;
+      text-align:center;
+    }
+    .overlayBox{
+      max-width:620px; width:100%;
+      border-radius:16px;
+      border:1px solid var(--border);
+      background:rgba(0,0,0,0.16);
+      padding:14px;
+      box-shadow:0 10px 40px rgba(0,0,0,0.25);
+    }
+    .overlayTitle{
+      font-family:"Orbitron", system-ui, sans-serif;
+      font-weight:900;
+      margin:0 0 8px;
+      font-size:14px;
+      letter-spacing:0.02em;
+      color:var(--text);
+    }
+    .overlayText{ margin:0; font-size:12px; color:var(--muted); }
+    .kbd{
+      display:inline-block;
+      padding:2px 8px;
+      border-radius:8px;
+      border:1px solid var(--border);
+      background:rgba(0,0,0,0.10);
+      color:var(--text);
+      font-size:12px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <h1>VENTRA · SIDE-SCROLLER</h1>
+        <p class="sub">Primary: three breath pulses. Backup: Space or click.</p>
+      </div>
+
+      <div class="row">
+        <span class="pill" id="midiPill">MIDI: not enabled</span>
+        <span class="pill" id="inputPill">Input: —</span>
+        <span class="pill" id="ccPill">CC2: 000</span>
+      </div>
+    </header>
+
+    <div class="card">
+      <div class="row" style="justify-content: space-between;">
+        <div class="row">
+          <button id="btnEnable" type="button">Enable MIDI</button>
+
+          <label class="small">
+            Input:
+            <select id="selInput" disabled></select>
+          </label>
+        </div>
+
+        <div class="row">
+          <span class="status" id="status">Click “Enable MIDI”, then select “Ventra” if needed.</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="gameShell" aria-label="Ventra game">
+      <div class="hud">
+        <div class="hudItem" id="hudTime">Time: 0.0 s</div>
+        <div class="hudItem" id="hudSpeed">Speed: 0</div>
+      </div>
+
+      <canvas id="game"></canvas>
+
+      <div class="overlay" id="overlay">
+        <div class="overlayBox">
+          <p class="overlayTitle" id="overlayTitle">Ready</p>
+          <p class="overlayText" id="overlayText">
+            Start with <span class="kbd">three breath pulses</span>.
+            Backup: <span class="kbd">Space</span> or click.
+            No device: hold <span class="kbd">↑</span> to simulate blowing.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    'use strict';
+
+    // ============================================================
+    // Utility
+    // ============================================================
+    function clamp(n, lo, hi) { return Math.min(hi, Math.max(lo, n)); }
+
+    // ============================================================
+    // Debug toggles
+    // ============================================================
+    const SHOW_COLLISION_DEBUG = true;      // set false when done tuning
+    const COLL_FOLLOWS_SPRITE_TILT = true;  // collision ellipse rotates with sprite tilt
+    const DEBUG_COLL_COLOUR = '#00FFFF';    // cyan (standout)
+
+    // ============================================================
+    // Asset: monkey SVG loaded as image (same folder as index.html)
+    // ============================================================
+    const monkeyImg = new Image();
+    let monkeyReady = false;
+    monkeyImg.onload = () => { monkeyReady = true; };
+    monkeyImg.onerror = (e) => { console.warn('Failed to load monkey.svg', e); };
+    monkeyImg.src = './monkey.svg';
+
+    // Visual size (in CSS pixels mapped into canvas pixels by DPR)
+    // This is independent of collision size.
+    const MONKEY_DRAW_W = 150;
+    const MONKEY_DRAW_H = 150;
+
+    // Ellipse collision parameters (in canvas pixels, scaled by DPR during draw/update)
+    // Rotation anticlockwise (~35°).
+    const COLL_ROT_DEG = -24;
+    const COLL_ROT = (COLL_ROT_DEG * Math.PI) / 180;
+
+    // Ellipse radii relative to draw size
+    // a = semi-major, b = semi-minor
+    const COLL_A_FRAC = 0.40;
+    const COLL_B_FRAC = 0.15;
+
+    // ------------------------------------------------------------
+    // NEW: Collision centre offset (fractions of draw size)
+    // +X => right, -X => left
+    // +Y => down,  -Y => up
+    // Start at 0, then tune in small increments (e.g. 0.02).
+    // ------------------------------------------------------------
+    const COLL_CX_OFF_FRAC = 0.05;
+    const COLL_CY_OFF_FRAC = 0.03;
+
+    // ============================================================
+    // WebMIDI (Channel 1, CC2)
+    // ============================================================
+    const targetChannel1Based = 1;
+    const targetCC = 2;
+
+    const btnEnable = document.getElementById('btnEnable');
+    const selInput  = document.getElementById('selInput');
+    const statusEl  = document.getElementById('status');
+
+    const midiPill = document.getElementById('midiPill');
+    const inputPill = document.getElementById('inputPill');
+    const ccPill = document.getElementById('ccPill');
+
+    let midiAccess = null;
+    let currentInput = null;
+
+    function setStatus(msg) { statusEl.textContent = msg; }
+
+    function detachCurrentInput() {
+      if (currentInput) currentInput.onmidimessage = null;
+      currentInput = null;
+    }
+
+    function attachInputById(id) {
+      detachCurrentInput();
+      const input = midiAccess.inputs.get(id);
+
+      if (!input) {
+        setStatus('Selected input not available.');
+        inputPill.textContent = 'Input: —';
+        return;
+      }
+
+      currentInput = input;
+      currentInput.onmidimessage = onMIDIMessage;
+
+      setStatus(`Listening: ${input.name || 'Unnamed device'}`);
+      inputPill.textContent = `Input: ${input.name || 'Unnamed'}`;
+    }
+
+    function refreshInputList() {
+      const prevId = selInput.value;
+      selInput.innerHTML = '';
+
+      const inputs = Array.from(midiAccess.inputs.values());
+      if (inputs.length === 0) {
+        selInput.disabled = true;
+        setStatus('No MIDI inputs detected.');
+        inputPill.textContent = 'Input: —';
+        return;
+      }
+
+      for (const input of inputs) {
+        const opt = document.createElement('option');
+        opt.value = input.id;
+        opt.textContent = `${input.name || 'Unnamed'}${input.manufacturer ? ' — ' + input.manufacturer : ''}`;
+        selInput.appendChild(opt);
+      }
+
+      selInput.disabled = false;
+      const nextId = inputs.some(i => i.id === prevId) ? prevId : inputs[0].id;
+      selInput.value = nextId;
+      attachInputById(nextId);
+    }
+
+    async function enableMIDI() {
+      if (!('requestMIDIAccess' in navigator)) {
+        setStatus('Web MIDI API not supported in this browser.');
+        midiPill.textContent = 'MIDI: unsupported';
+        return;
+      }
+
+      try {
+        midiAccess = await navigator.requestMIDIAccess({ sysex: false });
+        setStatus('MIDI enabled. Enumerating inputs…');
+        midiPill.textContent = 'MIDI: enabled';
+        refreshInputList();
+        midiAccess.onstatechange = () => refreshInputList();
+      } catch (err) {
+        setStatus('MIDI access denied or unavailable.');
+        midiPill.textContent = 'MIDI: denied';
+        console.error(err);
+      }
+    }
+
+    btnEnable.addEventListener('click', enableMIDI);
+    selInput.addEventListener('change', () => { if (midiAccess) attachInputById(selInput.value); });
+
+    // ============================================================
+    // Game
+    // ============================================================
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+
+    const overlay = document.getElementById('overlay');
+    const overlayTitle = document.getElementById('overlayTitle');
+    const overlayText = document.getElementById('overlayText');
+    const hudTime = document.getElementById('hudTime');
+    const hudSpeed = document.getElementById('hudSpeed');
+
+    // Input
+    let cc2 = 0; // 0..127
+    let simulateKey = false;
+
+    function setCC2(v) {
+      cc2 = clamp(v | 0, 0, 127);
+      ccPill.textContent = `CC2: ${String(cc2).padStart(3, '0')}`;
+    }
+
+    // Primary start/restart: breath pulses
+    const PULSE_THRESHOLD = 32;
+    const PULSE_WINDOW_S = 1.6;
+    let prevCC2 = 0;
+    let pulseCount = 0;
+    let pulseWindowT = 0;
+
+    function resetPulses() {
+      pulseCount = 0;
+      pulseWindowT = 0;
+      prevCC2 = cc2;
+    }
+
+    function registerPulse(dt) {
+      const rising = (prevCC2 < PULSE_THRESHOLD) && (cc2 >= PULSE_THRESHOLD);
+      prevCC2 = cc2;
+
+      if (pulseWindowT > 0) {
+        pulseWindowT = Math.max(0, pulseWindowT - dt);
+        if (pulseWindowT === 0) pulseCount = 0;
+      }
+
+      if (rising) {
+        if (pulseWindowT === 0) {
+          pulseWindowT = PULSE_WINDOW_S;
+          pulseCount = 1;
+        } else {
+          pulseCount += 1;
+        }
+
+        if (pulseCount >= 3) {
+          pulseCount = 0;
+          pulseWindowT = 0;
+
+          if (!world.started && !world.over) startGame();
+          else if (world.over) startGame();
+        }
+      }
+    }
+
+    // Canvas sizing
+    let dpr = 1;
+    function resizeCanvasToDisplaySize() {
+      const rect = canvas.getBoundingClientRect();
+      dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      const w = Math.max(320, Math.round(rect.width * dpr));
+      const h = Math.max(240, Math.round(rect.height * dpr));
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      return { w, h };
+    }
+
+    // Player state (position in canvas pixels)
+    const player = { x: 0, y: 0, vy: 0, tilt: 0 };
+
+    const world = {
+      started: false,
+      over: false,
+      survive: 0,
+
+      baseSpeed: 180,
+      speedGain: 2,
+      speed: 180,
+
+      groundPad: 22,
+      topPad: 22,
+
+      distAcc: 0,
+      nextSpawnDist: 620,
+      obstacles: []
+    };
+
+    // Vertical response (speed-adaptive)
+    const G = 3600;
+    const K_BASE = 80;
+    const K_BOOST = 1.05;
+    const DAMP_BASE = 12.5;
+    const VTERM = 2400;
+
+    // Floaty fall (release-only, fades out with speed)
+    const G_FALL_SCALE_MIN = 0.35;
+    const G_FALL_CC_MAX = 12;
+
+    function updateHUD() {
+      hudTime.textContent = `Time: ${world.survive.toFixed(1)} s`;
+      hudSpeed.textContent = `Speed: ${world.speed.toFixed(0)}`;
+    }
+
+    function resetGame() {
+      world.started = false;
+      world.over = false;
+      world.survive = 0;
+      world.speed = world.baseSpeed;
+      world.distAcc = 0;
+      world.obstacles = [];
+      world.nextSpawnDist = 620;
+
+      player.vy = 0;
+      player.tilt = 0;
+      resetPulses();
+
+      overlay.style.display = 'grid';
+      overlayTitle.textContent = 'Ready';
+      overlayText.innerHTML =
+        'Start with <span class="kbd">three breath pulses</span>. ' +
+        'Backup: <span class="kbd">Space</span> or click. ' +
+        'No device: hold <span class="kbd">↑</span> to simulate blowing.';
+      updateHUD();
+    }
+
+    function startGame() {
+      if (world.over) resetGame();
+      world.started = true;
+      world.over = false;
+      overlay.style.display = 'none';
+      resetPulses();
+    }
+
+    function gameOver() {
+      world.over = true;
+      world.started = false;
+      overlay.style.display = 'grid';
+      overlayTitle.textContent = 'Game over';
+      overlayText.innerHTML =
+        `Survived: <span class="kbd">${world.survive.toFixed(1)} s</span>. ` +
+        `Restart with <span class="kbd">three breath pulses</span>, or <span class="kbd">Space</span>, or click.`;
+      resetPulses();
+    }
+
+    function spawnObstacle(w, h) {
+      const groundY = h - world.groundPad;
+      const ceilingY = world.topPad;
+
+      const gap = 150;
+      const kind = (Math.random() < 0.55) ? 'pipe' : 'block';
+
+      if (kind === 'pipe') {
+        const pipeW = 56 * dpr;
+        const gapCentreMin = ceilingY + 90 * dpr;
+        const gapCentreMax = groundY - 90 * dpr;
+        const gapCentre = clamp(
+          Math.round(gapCentreMin + Math.random() * (gapCentreMax - gapCentreMin)),
+          gapCentreMin, gapCentreMax
+        );
+
+        const topH = Math.max(20 * dpr, Math.round((gapCentre - (gap * dpr) / 2) - ceilingY));
+        const botY = Math.round(gapCentre + (gap * dpr) / 2);
+        const botH = Math.max(20 * dpr, Math.round(groundY - botY));
+
+        world.obstacles.push({
+          kind: 'pipe',
+          x: w + 20 * dpr,
+          w: pipeW,
+          top: { y: ceilingY, w: pipeW, h: topH },
+          bot: { y: botY,     w: pipeW, h: botH }
+        });
+      } else {
+        const blockW = Math.round((46 + Math.random() * 46) * dpr);
+        const blockH = Math.round((50 + Math.random() * 140) * dpr);
+        world.obstacles.push({
+          kind: 'block',
+          x: w + 20 * dpr,
+          y: groundY - blockH,
+          w: blockW,
+          h: blockH
+        });
+      }
+    }
+
+    // Ellipse collision against axis-aligned rectangle, with ellipse rotated anticlockwise by theta.
+    function ellipseRectHit(cx, cy, a, b, theta, rx, ry, rw, rh) {
+      const cosT = Math.cos(-theta);
+      const sinT = Math.sin(-theta);
+
+      function toEllipseSpace(x, y) {
+        const dx = x - cx;
+        const dy = y - cy;
+        const ex = dx * cosT - dy * sinT;
+        const ey = dx * sinT + dy * cosT;
+        return { x: ex, y: ey };
+      }
+      function insideEllipse(ex, ey) {
+        const nx = ex / a;
+        const ny = ey / b;
+        return (nx * nx + ny * ny) <= 1;
+      }
+
+      const corners = [
+        [rx, ry],
+        [rx + rw, ry],
+        [rx, ry + rh],
+        [rx + rw, ry + rh],
+      ];
+      for (const [x, y] of corners) {
+        const p = toEllipseSpace(x, y);
+        if (insideEllipse(p.x, p.y)) return true;
+      }
+
+      const closestX = clamp(cx, rx, rx + rw);
+      const closestY = clamp(cy, ry, ry + rh);
+      const q = toEllipseSpace(closestX, closestY);
+      if (insideEllipse(q.x, q.y)) return true;
+
+      const samplesPerEdge = 3;
+      for (let i = 1; i <= samplesPerEdge; i++) {
+        const t = i / (samplesPerEdge + 1);
+
+        let sx = rx + t * rw, sy = ry;
+        let p = toEllipseSpace(sx, sy);
+        if (insideEllipse(p.x, p.y)) return true;
+
+        sx = rx + t * rw; sy = ry + rh;
+        p = toEllipseSpace(sx, sy);
+        if (insideEllipse(p.x, p.y)) return true;
+
+        sx = rx; sy = ry + t * rh;
+        p = toEllipseSpace(sx, sy);
+        if (insideEllipse(p.x, p.y)) return true;
+
+        sx = rx + rw; sy = ry + t * rh;
+        p = toEllipseSpace(sx, sy);
+        if (insideEllipse(p.x, p.y)) return true;
+      }
+
+      return false;
+    }
+
+    function cssVar(name) {
+      return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    }
+
+    function drawEllipseDebug(cx, cy, a, b, theta) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(theta);
+
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = DEBUG_COLL_COLOUR;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = 0.85;
+      ctx.lineWidth = 2 * dpr;
+      ctx.strokeStyle = DEBUG_COLL_COLOUR;
+      ctx.beginPath();
+      ctx.ellipse(0, 0, a, b, 0, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.globalAlpha = 0.9;
+      ctx.beginPath();
+      ctx.moveTo(-a, 0);
+      ctx.lineTo(a, 0);
+      ctx.stroke();
+
+      ctx.restore();
+    }
+
+    function drawScene(w, h) {
+      ctx.clearRect(0, 0, w, h);
+
+      const groundY = h - world.groundPad;
+
+      const border = cssVar('--border');
+      const accentA = cssVar('--accentA');
+      const accentB = cssVar('--accentB');
+      const text = cssVar('--text');
+      const muted = cssVar('--muted');
+      const warn = cssVar('--warn');
+
+      // Ground
+      ctx.save();
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = border;
+      ctx.lineWidth = 2 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(0, groundY + 1);
+      ctx.lineTo(w, groundY + 1);
+      ctx.stroke();
+      ctx.restore();
+
+      // Obstacles
+      for (const ob of world.obstacles) {
+        if (ob.kind === 'pipe') {
+          ctx.fillStyle = accentA;
+          ctx.fillRect(ob.x, ob.top.y, ob.top.w, ob.top.h);
+          ctx.fillStyle = accentB;
+          ctx.fillRect(ob.x, ob.bot.y, ob.bot.w, ob.bot.h);
+
+          ctx.strokeStyle = border;
+          ctx.lineWidth = 1 * dpr;
+          ctx.strokeRect(ob.x + 0.5 * dpr, ob.top.y + 0.5 * dpr, ob.top.w - 1 * dpr, ob.top.h - 1 * dpr);
+          ctx.strokeRect(ob.x + 0.5 * dpr, ob.bot.y + 0.5 * dpr, ob.bot.w - 1 * dpr, ob.bot.h - 1 * dpr);
+        } else {
+          ctx.fillStyle = accentA;
+          ctx.fillRect(ob.x, ob.y, ob.w, ob.h);
+          ctx.strokeStyle = border;
+          ctx.lineWidth = 1 * dpr;
+          ctx.strokeRect(ob.x + 0.5 * dpr, ob.y + 0.5 * dpr, ob.w - 1 * dpr, ob.h - 1 * dpr);
+        }
+      }
+
+      // Player: monkey sprite (fallback circle until loaded)
+      const drawW = MONKEY_DRAW_W * dpr;
+      const drawH = MONKEY_DRAW_H * dpr;
+
+      if (monkeyReady) {
+        ctx.save();
+        ctx.translate(player.x, player.y);
+        ctx.rotate(player.tilt);
+        ctx.drawImage(monkeyImg, -drawW / 2, -drawH / 2, drawW, drawH);
+        ctx.restore();
+      } else {
+        ctx.save();
+        ctx.fillStyle = text;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, 14 * dpr, 0, Math.PI * 2);
+        ctx.fill();
+
+        const pct = cc2 / 127;
+        ctx.globalAlpha = 0.85;
+        ctx.fillStyle = (pct > 0.01) ? warn : muted;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, Math.max(3 * dpr, Math.round(14 * dpr * (0.25 + 0.35 * pct))), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // Debug: draw collision ellipse overlay (with centre offset)
+      if (SHOW_COLLISION_DEBUG) {
+        const a = Math.max(8 * dpr, (drawW * COLL_A_FRAC));
+        const b = Math.max(6 * dpr, (drawH * COLL_B_FRAC));
+        const theta = COLL_ROT + (COLL_FOLLOWS_SPRITE_TILT ? player.tilt : 0);
+
+        const cx = player.x + (drawW * COLL_CX_OFF_FRAC);
+        const cy = player.y + (drawH * COLL_CY_OFF_FRAC);
+
+        drawEllipseDebug(cx, cy, a, b, theta);
+      }
+    }
+
+    // Backup start/restart
+    function backupStartOrRestart() {
+      if (!world.started && !world.over) startGame();
+      else if (world.over) startGame();
+    }
+
+    // Keyboard + click
+    window.addEventListener('keydown', (e) => {
+      if (e.code === 'ArrowUp') simulateKey = true;
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        backupStartOrRestart();
+      }
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.code === 'ArrowUp') simulateKey = false;
+    });
+    canvas.addEventListener('pointerdown', backupStartOrRestart);
+
+    // Main loop
+    let lastTs = 0;
+    function step(ts) {
+      const { w, h } = resizeCanvasToDisplaySize();
+      const dt = Math.min(0.033, Math.max(0.001, (ts - (lastTs || ts)) / 1000));
+      lastTs = ts;
+
+      if (simulateKey) setCC2(90);
+      else if (!midiAccess) setCC2(0);
+
+      registerPulse(dt);
+
+      const groundY = h - world.groundPad;
+      const ceilingY = world.topPad;
+
+      if (!world.started && world.survive === 0 && world.obstacles.length === 0 && !world.over) {
+        player.x = Math.round(w * 0.22);
+        player.y = groundY - 14 * dpr;
+      }
+
+      if (world.started && !world.over) {
+        world.survive += dt;
+        world.speed = world.baseSpeed + (world.speedGain * world.survive * 10);
+
+        const pct = cc2 / 127;
+        const maxLift = (groundY - 14 * dpr) - (ceilingY + 14 * dpr);
+        const targetY = (groundY - 14 * dpr) - (pct * maxLift);
+
+        const speedFactor = clamp(world.speed / world.baseSpeed, 1, 3.2);
+        const K = K_BASE * (1 + K_BOOST * (speedFactor - 1));
+        const DAMP = DAMP_BASE * (0.95 + 0.25 * (speedFactor - 1));
+
+        const speedFade = clamp((speedFactor - 1) / (3.2 - 1), 0, 1);
+        const ccFade = clamp(cc2 / G_FALL_CC_MAX, 0, 1);
+        const fallScale = (G_FALL_SCALE_MIN + (1 - G_FALL_SCALE_MIN) * ccFade);
+        const gEff = G * (fallScale + (1 - fallScale) * speedFade);
+
+        let ay = (K * (targetY - player.y)) - (DAMP * player.vy) + gEff;
+
+        player.vy += ay * dt;
+        player.vy = clamp(player.vy, -VTERM * dpr, VTERM * dpr);
+        player.y += player.vy * dt;
+
+        // Tilt derived from current vertical velocity (shared by sprite + collision)
+        player.tilt = clamp(-player.vy / (900 * dpr), -0.20, 0.20);
+
+        const floorY = groundY - 14 * dpr;
+        if (player.y > floorY) { player.y = floorY; if (player.vy > 0) player.vy = 0; }
+        const ceilY = ceilingY + 14 * dpr;
+        if (player.y < ceilY) { player.y = ceilY; if (player.vy < 0) player.vy = 0; }
+
+        const t = world.survive;
+        const startMean = 620 * dpr;
+        const endMean = 480 * dpr;
+        const ease = clamp(t / 18, 0, 1);
+        const mean = startMean + (endMean - startMean) * ease;
+        const jitter = 0.18;
+
+        world.distAcc += (world.speed * dpr) * dt;
+        if (world.distAcc >= world.nextSpawnDist) {
+          world.distAcc = 0;
+          spawnObstacle(w, h);
+          const r = (Math.random() * 2 - 1) * jitter;
+          world.nextSpawnDist = Math.max(360 * dpr, mean * (1 + r));
+        }
+
+        const dx = (world.speed * dpr) * dt;
+        for (const ob of world.obstacles) ob.x -= dx;
+
+        while (world.obstacles.length && (world.obstacles[0].x + (world.obstacles[0].w || world.obstacles[0].top.w)) < -40 * dpr) {
+          world.obstacles.shift();
+        }
+
+        // Collision: rotated ellipse, with centre offset, optionally following sprite tilt
+        const drawW = MONKEY_DRAW_W * dpr;
+        const drawH = MONKEY_DRAW_H * dpr;
+        const a = Math.max(8 * dpr, (drawW * COLL_A_FRAC));
+        const b = Math.max(6 * dpr, (drawH * COLL_B_FRAC));
+        const collTheta = COLL_ROT + (COLL_FOLLOWS_SPRITE_TILT ? player.tilt : 0);
+
+        const cx = player.x + (drawW * COLL_CX_OFF_FRAC);
+        const cy = player.y + (drawH * COLL_CY_OFF_FRAC);
+
+        for (const ob of world.obstacles) {
+          if (ob.kind === 'pipe') {
+            if (
+              ellipseRectHit(cx, cy, a, b, collTheta, ob.x, ob.top.y, ob.top.w, ob.top.h) ||
+              ellipseRectHit(cx, cy, a, b, collTheta, ob.x, ob.bot.y, ob.bot.w, ob.bot.h)
+            ) { gameOver(); break; }
+          } else {
+            if (ellipseRectHit(cx, cy, a, b, collTheta, ob.x, ob.y, ob.w, ob.h)) {
+              gameOver(); break;
+            }
+          }
+        }
+      } else {
+        // Keep tilt stable when not running
+        player.tilt = 0;
+      }
+
+      updateHUD();
+      drawScene(w, h);
+      requestAnimationFrame(step);
+    }
+
+    // ============================================================
+    // Single MIDI message handler
+    // ============================================================
+    function onMIDIMessage(e) {
+      const data = e.data;
+      if (!data || data.length < 3) return;
+
+      const status = data[0];
+      const type = status & 0xF0;
+
+      const targetStatus = 0xB0 | ((targetChannel1Based - 1) & 0x0F);
+      if (type === 0xB0 && status === targetStatus && data[1] === targetCC) {
+        setCC2(data[2]);
+      }
+    }
+
+    // Boot
+    resetGame();
+    midiPill.textContent = 'MIDI: not enabled';
+    inputPill.textContent = 'Input: —';
+    setCC2(0);
+    setStatus('Click “Enable MIDI”, then select “Ventra” if needed.');
+    requestAnimationFrame(step);
+  </script>
+</body>
+</html>
