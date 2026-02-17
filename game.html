@@ -217,21 +217,26 @@
       Ventra uses WebMIDI. Support depends on browser.
     </p>
 
-    <ul style="font-size:12px;line-height:1.5;padding-left:18px;">
-      <li>
-        <strong>Chrome / Edge (recommended)</strong><br>
-        WebMIDI works natively. Plug in Ventra and refresh if not detected.
+    <ul style="font-size:12px;line-height:1.6;padding-left:18px;margin:10px 0 0;">
+      <li style="margin:10px 0;">
+        <strong>Chrome / Edge (recommended):</strong>
+        <span style="color:var(--muted); font-weight:400;">
+          WebMIDI works natively. Plug in Ventra and refresh if not detected.
+        </span>
       </li>
-      <li>
-        <strong>Firefox</strong><br>
-        Open <code>about:config</code> → set
-        <code>dom.webmidi.enabled</code> to <code>true</code>,
-        then refresh.
+    
+      <li style="margin:10px 0;">
+        <strong>Firefox:</strong>
+        <span style="color:var(--muted); font-weight:400;">
+          Open <code>about:config</code> → set <code>dom.webmidi.enabled</code> to <code>true</code>, then refresh.
+        </span>
       </li>
-      <li>
-        <strong>Safari (macOS)</strong><br>
-        Develop → Experimental Features → enable WebMIDI.
-        Restart browser if required.
+    
+      <li style="margin:10px 0;">
+        <strong>Safari (macOS):</strong>
+        <span style="color:var(--muted); font-weight:400;">
+          Develop → Experimental Features → enable WebMIDI. Restart browser if required.
+        </span>
       </li>
     </ul>
 
@@ -493,15 +498,15 @@
     };
 
     // Vertical response (tuned for softer early fall / gliding)
-    const G = 3400;
+    const G = 2600;
     const K_BASE = 70;
     const K_BOOST = 1.15;
-    const DAMP_BASE = 15.5;
+    const DAMP_BASE = 18;
     const VTERM = 2400;
 
     // Floaty fall (release-only, fades out with speed)
-    const G_FALL_SCALE_MIN = 0.18;
-    const G_FALL_CC_MAX = 18;
+    const G_FALL_SCALE_MIN = 0.10;
+    const G_FALL_CC_MAX = 22;
 
     function updateHUD() {
       hudTime.textContent = `Time: ${world.survive.toFixed(1)} s`;
@@ -509,23 +514,30 @@
     }
 
     function resetGame() {
+      const { w, h } = resizeCanvasToDisplaySize();
+    
       world.started = false;
       world.over = false;
       world.survive = 0;
       world.speed = world.baseSpeed;
       world.distAcc = 0;
       world.obstacles = [];
-      world.nextSpawnDist = 760 * dpr;
-
+      world.nextSpawnDist = 620;
+    
+      const groundY = h - world.groundPad;
+    
+      // Spawn near vertical middle, then naturally drift down.
+      player.x = Math.round(w * 0.22);
+      player.y = Math.round(h * 0.50);
       player.vy = 0;
       player.tilt = 0;
+    
       resetPulses();
-
+    
       overlay.style.display = 'grid';
-      overlayTitle.textContent = currentInput ? 'Ready' : 'Ventra required';
-      overlayText.innerHTML = currentInput
-        ? 'Start with <span class="kbd">three breath pulses</span>.'
-        : 'Plug in Ventra, refresh, then start with <span class="kbd">three breath pulses</span>.';
+      overlayTitle.textContent = 'Ready';
+      overlayText.innerHTML =
+        'Start with <span class="kbd">three breath pulses</span>.';
       updateHUD();
     }
 
@@ -794,14 +806,9 @@
       const ceilingY = world.topPad;
 
       // Start position: centred vertically (then naturally drifts down)
-      if (!world.started && world.survive === 0 && world.obstacles.length === 0 && !world.over) {
-        player.x = Math.round(w * 0.22);
-        player.y = Math.round(h * 0.50);
-      }
-
       if (world.started && !world.over) {
         world.survive += dt;
-        world.speed = world.baseSpeed + (world.speedGain * world.survive * 10);
+        world.speed = world.baseSpeed + (world.speedGain * world.survive * 8);
 
         const pct = cc2 / 127;
         const maxLift = (groundY - 14 * dpr) - (ceilingY + 14 * dpr);
@@ -931,3 +938,4 @@
   </script>
 </body>
 </html>
+
