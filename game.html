@@ -206,7 +206,7 @@
     border-radius:16px;
     background:var(--card);
     color:var(--text);
-    max-width:520px;
+    max-width:480px;
     padding:18px;
   ">
     <h3 style="margin-top:0;font-family:Orbitron,sans-serif;font-size:14px;">
@@ -498,15 +498,15 @@
     };
 
     // Vertical response (tuned for softer early fall / gliding)
-    const G = 2600;
+    const G = 2200;
     const K_BASE = 70;
     const K_BOOST = 1.15;
-    const DAMP_BASE = 18;
+    const DAMP_BASE = 22;
     const VTERM = 2400;
 
     // Floaty fall (release-only, fades out with speed)
-    const G_FALL_SCALE_MIN = 0.10;
-    const G_FALL_CC_MAX = 22;
+    const G_FALL_SCALE_MIN = 0.06;
+    const G_FALL_CC_MAX = 28;
 
     function updateHUD() {
       hudTime.textContent = `Time: ${world.survive.toFixed(1)} s`;
@@ -938,4 +938,5 @@
   </script>
 </body>
 </html>
+
 
