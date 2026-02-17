@@ -174,6 +174,10 @@
         </button>
 
         <span class="pill"><a href="./index.html" title="Back to instructions & feedback">Back</a></span>
+        
+        <button class="iconBtn" id="helpBtn" type="button"
+                aria-label="Help"
+                title="Browser & MIDI help">?</button>
       </div>
     </header>
 
@@ -198,6 +202,45 @@
     </div>
   </div>
 
+  <dialog id="helpDialog" style="
+    border:1px solid var(--border);
+    border-radius:16px;
+    background:var(--card);
+    color:var(--text);
+    max-width:520px;
+    padding:18px;
+  ">
+    <h3 style="margin-top:0;font-family:Orbitron,sans-serif;font-size:14px;">
+      Browser & MIDI Setup
+    </h3>
+
+    <p style="font-size:12px;color:var(--muted);">
+      Ventra uses WebMIDI. Support depends on browser.
+    </p>
+
+    <ul style="font-size:12px;line-height:1.5;padding-left:18px;">
+      <li>
+        <strong>Chrome / Edge (recommended)</strong><br>
+        WebMIDI works natively. Plug in Ventra and refresh if not detected.
+      </li>
+      <li>
+        <strong>Firefox</strong><br>
+        Open <code>about:config</code> → set
+        <code>dom.webmidi.enabled</code> to <code>true</code>,
+        then refresh.
+      </li>
+      <li>
+        <strong>Safari (macOS)</strong><br>
+        Develop → Experimental Features → enable WebMIDI.
+        Restart browser if required.
+      </li>
+    </ul>
+
+    <div style="text-align:right;margin-top:12px;">
+      <button id="closeHelp" class="iconBtn" type="button">Close</button>
+    </div>
+  </dialog>
+  
   <audio id="bgm" loop preload="auto">
     <source src="./music.ogg" type="audio/ogg">
     <source src="./music.mp3" type="audio/mpeg">
@@ -846,9 +889,37 @@
       }
     }
 
+    // ============================================================
+    // Help dialog
+    // ============================================================
+    
+    const helpBtn = document.getElementById('helpBtn');
+    const helpDialog = document.getElementById('helpDialog');
+    const closeHelp = document.getElementById('closeHelp');
+    
+    helpBtn.addEventListener('click', () => {
+      helpDialog.showModal();
+    });
+    
+    closeHelp.addEventListener('click', () => {
+      helpDialog.close();
+    });
+    
+    helpDialog.addEventListener('click', (e) => {
+      const rect = helpDialog.getBoundingClientRect();
+      const inside =
+        e.clientX >= rect.left &&
+        e.clientX <= rect.right &&
+        e.clientY >= rect.top &&
+        e.clientY <= rect.bottom;
+      if (!inside) helpDialog.close();
+    });
+    
+    // Boot
     resetGame();
     setCC2(0);
     requestAnimationFrame(step);
   </script>
 </body>
 </html>
+
