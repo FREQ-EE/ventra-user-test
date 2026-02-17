@@ -175,7 +175,7 @@
         </button>
 
         <span class="pill"><a href="./index.html" title="Back to instructions & feedback">Back</a></span>
-        
+
         <button class="iconBtn" id="helpBtn" type="button"
                 aria-label="Help"
                 title="Browser & MIDI help">?</button>
@@ -195,8 +195,6 @@
           <p class="overlayTitle" id="overlayTitle">Ready</p>
           <p class="overlayText" id="overlayText">
             Start with <span class="kbd">three breath pulses</span>.
-            Backup: <span class="kbd">Space</span> or click.
-            No device: hold <span class="kbd">↑</span> to simulate blowing.
           </p>
         </div>
       </div>
@@ -241,7 +239,7 @@
       <button id="closeHelp" class="iconBtn" type="button">Close</button>
     </div>
   </dialog>
-  
+
   <audio id="bgm" loop preload="auto">
     <source src="./music.ogg" type="audio/ogg">
     <source src="./music.mp3" type="audio/mpeg">
@@ -335,23 +333,14 @@
 
       try {
         midiAccess = await navigator.requestMIDIAccess({ sysex: false });
-
-        // Initial attach attempt
         attachVentraIfPresent();
-
-        // If the browser does report hot-plug, update the status.
-        // (Even if your current browser/device combo is flaky, this does no harm.)
-        midiAccess.onstatechange = () => {
-          attachVentraIfPresent();
-        };
+        midiAccess.onstatechange = () => attachVentraIfPresent();
       } catch (err) {
         console.error(err);
-        // In practice this is usually permission/gesture policy.
         setVentraText('Ventra not enabled — refresh and allow MIDI');
       }
     }
 
-    // Try immediately on load (no UI click flow).
     initMIDI();
 
     // ============================================================
@@ -416,13 +405,13 @@
     const hudSpeed = document.getElementById('hudSpeed');
 
     let cc2 = 0;
-    let simulateKey = false;
 
     function setCC2(v) {
       cc2 = clamp(v | 0, 0, 127);
       ccPill.textContent = `CC2: ${String(cc2).padStart(3, '0')}`;
     }
 
+    // Primary start/restart: breath pulses (requires Ventra connected)
     const PULSE_THRESHOLD = 32;
     const PULSE_WINDOW_S = 1.6;
     let prevCC2 = 0;
@@ -436,6 +425,13 @@
     }
 
     function registerPulse(dt) {
+      if (!currentInput) { // no device -> no play
+        pulseCount = 0;
+        pulseWindowT = 0;
+        prevCC2 = cc2;
+        return;
+      }
+
       const rising = (prevCC2 < PULSE_THRESHOLD) && (cc2 >= PULSE_THRESHOLD);
       prevCC2 = cc2;
 
@@ -462,6 +458,7 @@
       }
     }
 
+    // Canvas sizing
     let dpr = 1;
     function resizeCanvasToDisplaySize() {
       const rect = canvas.getBoundingClientRect();
@@ -475,6 +472,7 @@
       return { w, h };
     }
 
+    // Player state
     const player = { x: 0, y: 0, vy: 0, tilt: 0 };
 
     const world = {
@@ -490,18 +488,20 @@
       topPad: 22,
 
       distAcc: 0,
-      nextSpawnDist: 620,
+      nextSpawnDist: 760,
       obstacles: []
     };
 
-    const G = 3600;
-    const K_BASE = 80;
-    const K_BOOST = 1.05;
-    const DAMP_BASE = 12.5;
+    // Vertical response (tuned for softer early fall / gliding)
+    const G = 3400;
+    const K_BASE = 70;
+    const K_BOOST = 1.15;
+    const DAMP_BASE = 15.5;
     const VTERM = 2400;
 
-    const G_FALL_SCALE_MIN = 0.35;
-    const G_FALL_CC_MAX = 12;
+    // Floaty fall (release-only, fades out with speed)
+    const G_FALL_SCALE_MIN = 0.18;
+    const G_FALL_CC_MAX = 18;
 
     function updateHUD() {
       hudTime.textContent = `Time: ${world.survive.toFixed(1)} s`;
@@ -515,22 +515,27 @@
       world.speed = world.baseSpeed;
       world.distAcc = 0;
       world.obstacles = [];
-      world.nextSpawnDist = 620;
+      world.nextSpawnDist = 760 * dpr;
 
       player.vy = 0;
       player.tilt = 0;
       resetPulses();
 
       overlay.style.display = 'grid';
-      overlayTitle.textContent = 'Ready';
-      overlayText.innerHTML =
-        'Start with <span class="kbd">three breath pulses</span>. ' +
-        'Backup: <span class="kbd">Space</span> or click. ' +
-        'No device: hold <span class="kbd">↑</span> to simulate blowing.';
+      overlayTitle.textContent = currentInput ? 'Ready' : 'Ventra required';
+      overlayText.innerHTML = currentInput
+        ? 'Start with <span class="kbd">three breath pulses</span>.'
+        : 'Plug in Ventra, refresh, then start with <span class="kbd">three breath pulses</span>.';
       updateHUD();
     }
 
     function startGame() {
+      if (!currentInput) {
+        overlay.style.display = 'grid';
+        overlayTitle.textContent = 'Ventra required';
+        overlayText.innerHTML = 'Plug in Ventra, refresh, then start with <span class="kbd">three breath pulses</span>.';
+        return;
+      }
       if (world.over) resetGame();
       world.started = true;
       world.over = false;
@@ -546,7 +551,7 @@
       overlayTitle.textContent = 'Game over';
       overlayText.innerHTML =
         `Survived: <span class="kbd">${world.survive.toFixed(1)} s</span>. ` +
-        `Restart with <span class="kbd">three breath pulses</span>, or <span class="kbd">Space</span>, or click.`;
+        `Restart with <span class="kbd">three breath pulses</span>.`;
       resetPulses();
       stopMusic();
     }
@@ -683,7 +688,6 @@
       ctx.clearRect(0, 0, w, h);
 
       const groundY = h - world.groundPad;
-      const ceilingY = world.topPad;
 
       const border = cssVar('--border');
       const accentA = cssVar('--accentA');
@@ -692,6 +696,7 @@
       const muted = cssVar('--muted');
       const warn = cssVar('--warn');
 
+      // Ground
       ctx.save();
       ctx.globalAlpha = 0.9;
       ctx.strokeStyle = border;
@@ -702,6 +707,7 @@
       ctx.stroke();
       ctx.restore();
 
+      // Obstacles
       for (const ob of world.obstacles) {
         if (ob.kind === 'pipe') {
           ctx.fillStyle = accentA;
@@ -722,6 +728,7 @@
         }
       }
 
+      // Player
       const drawW = MONKEY_DRAW_W * dpr;
       const drawH = MONKEY_DRAW_H * dpr;
 
@@ -747,6 +754,7 @@
         ctx.restore();
       }
 
+      // Debug collision ellipse
       if (SHOW_COLLISION_DEBUG) {
         const a = Math.max(8 * dpr, (drawW * COLL_A_FRAC));
         const b = Math.max(6 * dpr, (drawH * COLL_B_FRAC));
@@ -759,40 +767,36 @@
       }
     }
 
-    function backupStartOrRestart() {
-      if (!world.started && !world.over) startGame();
-      else if (world.over) startGame();
-    }
-
-    window.addEventListener('keydown', (e) => {
-      if (e.code === 'ArrowUp') simulateKey = true;
-      if (e.code === 'Space') {
-        e.preventDefault();
-        backupStartOrRestart();
-      }
-    });
-    window.addEventListener('keyup', (e) => {
-      if (e.code === 'ArrowUp') simulateKey = false;
-    });
-    canvas.addEventListener('pointerdown', backupStartOrRestart);
-
+    // Main loop
     let lastTs = 0;
     function step(ts) {
       const { w, h } = resizeCanvasToDisplaySize();
       const dt = Math.min(0.033, Math.max(0.001, (ts - (lastTs || ts)) / 1000));
       lastTs = ts;
 
-      if (simulateKey) setCC2(90);
-      else if (!currentInput) setCC2(0);
+      // If Ventra drops out, hard stop input + show overlay.
+      if (!currentInput) {
+        setCC2(0);
+        if (world.started) {
+          world.started = false;
+          world.over = false;
+          overlay.style.display = 'grid';
+          overlayTitle.textContent = 'Ventra required';
+          overlayText.innerHTML = 'Plug in Ventra, refresh, then start with <span class="kbd">three breath pulses</span>.';
+          stopMusic();
+          resetPulses();
+        }
+      }
 
       registerPulse(dt);
 
       const groundY = h - world.groundPad;
       const ceilingY = world.topPad;
 
+      // Start position: centred vertically (then naturally drifts down)
       if (!world.started && world.survive === 0 && world.obstacles.length === 0 && !world.over) {
         player.x = Math.round(w * 0.22);
-        player.y = groundY - 14 * dpr;
+        player.y = Math.round(h * 0.50);
       }
 
       if (world.started && !world.over) {
@@ -825,9 +829,10 @@
         const ceilY = ceilingY + 14 * dpr;
         if (player.y < ceilY) { player.y = ceilY; if (player.vy < 0) player.vy = 0; }
 
+        // Obstacles: reduced density (larger spawn distances)
         const t = world.survive;
-        const startMean = 620 * dpr;
-        const endMean = 480 * dpr;
+        const startMean = 760 * dpr;
+        const endMean = 560 * dpr;
         const ease = clamp(t / 18, 0, 1);
         const mean = startMean + (endMean - startMean) * ease;
         const jitter = 0.18;
@@ -837,7 +842,7 @@
           world.distAcc = 0;
           spawnObstacle(w, h);
           const r = (Math.random() * 2 - 1) * jitter;
-          world.nextSpawnDist = Math.max(360 * dpr, mean * (1 + r));
+          world.nextSpawnDist = Math.max(420 * dpr, mean * (1 + r));
         }
 
         const dx = (world.speed * dpr) * dt;
@@ -847,6 +852,7 @@
           world.obstacles.shift();
         }
 
+        // Collision
         const drawW = MONKEY_DRAW_W * dpr;
         const drawH = MONKEY_DRAW_H * dpr;
         const a = Math.max(8 * dpr, (drawW * COLL_A_FRAC));
@@ -877,6 +883,9 @@
       requestAnimationFrame(step);
     }
 
+    // ============================================================
+    // Single MIDI message handler
+    // ============================================================
     function onMIDIMessage(e) {
       const data = e.data;
       if (!data || data.length < 3) return;
@@ -893,19 +902,18 @@
     // ============================================================
     // Help dialog
     // ============================================================
-    
     const helpBtn = document.getElementById('helpBtn');
     const helpDialog = document.getElementById('helpDialog');
     const closeHelp = document.getElementById('closeHelp');
-    
+
     helpBtn.addEventListener('click', () => {
       helpDialog.showModal();
     });
-    
+
     closeHelp.addEventListener('click', () => {
       helpDialog.close();
     });
-    
+
     helpDialog.addEventListener('click', (e) => {
       const rect = helpDialog.getBoundingClientRect();
       const inside =
@@ -915,7 +923,7 @@
         e.clientY <= rect.bottom;
       if (!inside) helpDialog.close();
     });
-    
+
     // Boot
     resetGame();
     setCC2(0);
@@ -923,6 +931,3 @@
   </script>
 </body>
 </html>
-
-
-
