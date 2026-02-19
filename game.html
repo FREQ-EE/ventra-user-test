@@ -317,9 +317,9 @@
     const MONKEY_AQUA_COLOUR = '#00FFFF';
 
     const MONKEY_BASE_ALPHA = 0.65;   // raise to ~1.2 behaviour by multi-pass (see below)
-    const MONKEY_GLOW_ALPHA = 1;  // gold/red/blue strength
-    const MONKEY_AURA_ALPHA = 1;  // aqua halo strength
-    const MONKEY_BASE_PASSES = 3;    // 2–4 boosts “white pop”
+    const MONKEY_GLOW_ALPHA = 1;      // gold/red/blue strength
+    const MONKEY_AURA_ALPHA = 1;      // aqua halo strength
+    const MONKEY_BASE_PASSES = 3;     // 2–4 boosts “white pop”
 
     // Blur radii in CSS px (we multiply by dpr when applying to the device-px canvas)
     const MONKEY_GLOW_BLUR_PX = 0.66;
@@ -327,9 +327,27 @@
 
     // Offsets in CSS px (we multiply by dpr when drawing)
     const MONKEY_GOLD_OFF_CSS = { x: -0,  y: 4 };
-    const MONKEY_RED_OFF_CSS  = { x: -4, y: 0 };
-    const MONKEY_BLUE_OFF_CSS = { x: 4,  y: 0 };
-    const MONKEY_AQUA_OFF_CSS = { x: 0,  y: 0 };
+    const MONKEY_RED_OFF_CSS  = { x: -4,  y: 0 };
+    const MONKEY_BLUE_OFF_CSS = { x: 4,   y: 0 };
+    const MONKEY_AQUA_OFF_CSS = { x: 0,   y: 0 };
+
+    // ============================================================
+    // Monkey dynamic "tail" (echo offsets)
+    // ============================================================
+    // X tail responds to speed (capped by time)
+    const TAIL_X_CAP_S = 60;          // after this many seconds, X tail stops extending
+    const TAIL_X_MAX_CSS = 18;        // maximum lag in CSS px for the furthest echo (red)
+
+    // Y tail responds to motion of the base (filtered player.vy)
+    const TAIL_Y_MAX_CSS = 35;        // maximum Y lag in CSS px for the furthest echo (red)
+    const TAIL_VY_FOR_MAX = 800;     // device px/s for full Y tail (tune)
+    const TAIL_VY_TAU_S = 0.10;       // seconds smoothing for vy-based tail
+
+    // Subtle growth with tail distance
+    const TAIL_SCALE_MAX = 0.06;      // 6% max growth for furthest echo
+
+    // Tail state
+    let tailVyFilt = 0;
 
     // Cached alpha mask + a reusable tinted layer canvas
     const monkeyMaskCanvas  = document.createElement('canvas');
@@ -392,19 +410,65 @@
     function drawMonkeyNeon(x, y, tilt, drawW, drawH) {
       if (!ensureMonkeyCache(drawW, drawH)) return;
 
-      // Placeholder hook for future motion-coupled offsets.
-      // For now it returns static offsets.
-      const goldOff = { x: MONKEY_GOLD_OFF_CSS.x * dpr, y: MONKEY_GOLD_OFF_CSS.y * dpr };
-      const redOff  = { x: MONKEY_RED_OFF_CSS.x  * dpr, y: MONKEY_RED_OFF_CSS.y  * dpr };
-      const blueOff = { x: MONKEY_BLUE_OFF_CSS.x * dpr, y: MONKEY_BLUE_OFF_CSS.y * dpr };
-      const aquaOff = { x: MONKEY_AQUA_OFF_CSS.x * dpr, y: MONKEY_AQUA_OFF_CSS.y * dpr };
+      // ------------------------------------------------------------
+      // Dynamic echo offsets:
+      //  - X lag grows with speed (capped by time)
+      //  - Y lag grows with actual motion (filtered player.vy)
+      // ------------------------------------------------------------
+      const speedFactor = clamp(world.speed / world.baseSpeed, 1, 3.2);
+      const tCap = clamp(world.survive / TAIL_X_CAP_S, 0, 1);
+
+      // normalise speed to 0..1 using your established speedFactor range
+      const xNorm = clamp((speedFactor - 1) / (3.2 - 1), 0, 1) * tCap;
+
+      // normalise vertical motion to 0..1 (tailVyFilt is in device px/s)
+      const vNorm = clamp(Math.abs(tailVyFilt) / Math.max(1e-6, TAIL_VY_FOR_MAX), 0, 1);
+
+      // Direction: echoes trail opposite direction of travel.
+      // Canvas y increases downward. If vy > 0 (moving down), echoes go up (negative y).
+      const ySign = (tailVyFilt >= 0) ? -1 : 1;
+
+      // Per-colour multipliers (ROYGBIV-ish “red furthest”)
+      const M_BLUE = 0.45; // closest echo
+      const M_GOLD = 0.70; // mid echo
+      const M_RED  = 1.00; // furthest echo
+
+      // Base static offsets (still respected), plus dynamic tail
+      const baseGold = { x: MONKEY_GOLD_OFF_CSS.x, y: MONKEY_GOLD_OFF_CSS.y };
+      const baseRed  = { x: MONKEY_RED_OFF_CSS.x,  y: MONKEY_RED_OFF_CSS.y  };
+      const baseBlue = { x: MONKEY_BLUE_OFF_CSS.x, y: MONKEY_BLUE_OFF_CSS.y };
+      const baseAqua = { x: MONKEY_AQUA_OFF_CSS.x, y: MONKEY_AQUA_OFF_CSS.y };
+
+      // Dynamic lags (CSS px)
+      const xLagBlue = -TAIL_X_MAX_CSS * xNorm * M_BLUE;
+      const xLagGold = -TAIL_X_MAX_CSS * xNorm * M_GOLD;
+      const xLagRed  = -TAIL_X_MAX_CSS * xNorm * M_RED;
+
+      const yLagBlue = (TAIL_Y_MAX_CSS * vNorm * M_BLUE) * ySign;
+      const yLagGold = (TAIL_Y_MAX_CSS * vNorm * M_GOLD) * ySign;
+      const yLagRed  = (TAIL_Y_MAX_CSS * vNorm * M_RED ) * ySign;
+
+      // Convert to device px
+      const goldOff = { x: (baseGold.x + xLagGold) * dpr, y: (baseGold.y + yLagGold) * dpr };
+      const redOff  = { x: (baseRed.x  + xLagRed ) * dpr, y: (baseRed.y  + yLagRed ) * dpr };
+      const blueOff = { x: (baseBlue.x + xLagBlue) * dpr, y: (baseBlue.y + yLagBlue) * dpr };
+
+      // Aura locked to base (no dynamic lag)
+      const aquaOff = { x: baseAqua.x * dpr, y: baseAqua.y * dpr };
+
+      // Subtle scale increases with tail distance (furthest echo largest)
+      const sBlue = 1 + (TAIL_SCALE_MAX * xNorm + TAIL_SCALE_MAX * 0.75 * vNorm) * M_BLUE;
+      const sGold = 1 + (TAIL_SCALE_MAX * xNorm + TAIL_SCALE_MAX * 0.75 * vNorm) * M_GOLD;
+      const sRed  = 1 + (TAIL_SCALE_MAX * xNorm + TAIL_SCALE_MAX * 0.75 * vNorm) * M_RED;
+      const sBase = 1.0;
+      const sAura = 1.0;
 
       const layers = [
-        { colour: MONKEY_AQUA_COLOUR, blurCss: MONKEY_AURA_BLUR_PX, dx: aquaOff.x, dy: aquaOff.y, stroke: MONKEY_AQUA_STROKE_PX, mode: 'hard-light' },
-        { colour: MONKEY_GOLD_COLOUR, blurCss: MONKEY_GLOW_BLUR_PX, dx: goldOff.x, dy: goldOff.y, stroke: MONKEY_GOLD_STROKE_PX, mode: 'normal' },
-        { colour: MONKEY_RED_COLOUR,  blurCss: MONKEY_GLOW_BLUR_PX, dx: redOff.x,  dy: redOff.y,  stroke: MONKEY_RED_STROKE_PX,  mode: 'normal' },
-        { colour: MONKEY_BLUE_COLOUR, blurCss: MONKEY_GLOW_BLUR_PX, dx: blueOff.x, dy: blueOff.y, stroke: MONKEY_BLUE_STROKE_PX, mode: 'normal' },
-        { colour: MONKEY_BASE_COLOUR, blurCss: 0,                  dx: 0,         dy: 0,          stroke: MONKEY_BASE_STROKE_PX, mode: 'normal' },
+        { colour: MONKEY_AQUA_COLOUR, blurCss: MONKEY_AURA_BLUR_PX, dx: aquaOff.x, dy: aquaOff.y, stroke: MONKEY_AQUA_STROKE_PX, mode: 'hard-light', scale: sAura },
+        { colour: MONKEY_GOLD_COLOUR, blurCss: MONKEY_GLOW_BLUR_PX, dx: goldOff.x, dy: goldOff.y, stroke: MONKEY_GOLD_STROKE_PX, mode: 'normal',     scale: sGold },
+        { colour: MONKEY_RED_COLOUR,  blurCss: MONKEY_GLOW_BLUR_PX, dx: redOff.x,  dy: redOff.y,  stroke: MONKEY_RED_STROKE_PX,  mode: 'normal',     scale: sRed  },
+        { colour: MONKEY_BLUE_COLOUR, blurCss: MONKEY_GLOW_BLUR_PX, dx: blueOff.x, dy: blueOff.y, stroke: MONKEY_BLUE_STROKE_PX, mode: 'normal',     scale: sBlue },
+        { colour: MONKEY_BASE_COLOUR, blurCss: 0,                  dx: 0,         dy: 0,          stroke: MONKEY_BASE_STROKE_PX, mode: 'normal',     scale: sBase },
       ];
 
       for (const L of layers) {
@@ -413,16 +477,13 @@
         ctx.save();
         ctx.translate(x + L.dx, y + L.dy);
         ctx.rotate(tilt);
+        if (L.scale && L.scale !== 1) ctx.scale(L.scale, L.scale);
 
         ctx.filter = (L.blurCss > 0)
           ? `blur(${(L.blurCss * dpr).toFixed(4)}px)`
           : 'none';
 
-        if (L.mode === 'hard-light') {
-          ctx.globalCompositeOperation = 'hard-light';
-        } else {
-          ctx.globalCompositeOperation = 'source-over';
-        }
+        ctx.globalCompositeOperation = (L.mode === 'hard-light') ? 'hard-light' : 'source-over';
 
         if (L.colour === MONKEY_BASE_COLOUR) ctx.globalAlpha = MONKEY_BASE_ALPHA;
         else if (L.colour === MONKEY_AQUA_COLOUR) ctx.globalAlpha = MONKEY_AURA_ALPHA;
@@ -769,6 +830,9 @@
       player.y = Math.round(h * 0.50);
       player.vy = 0;
       player.tilt = 0;
+
+      // Tail state reset
+      tailVyFilt = 0;
     
       resetPulses();
     
@@ -1033,6 +1097,7 @@
           overlayText.innerHTML = 'Plug in Ventra, refresh, then start with <span class="kbd">three breath pulses</span>.';
           stopMusic();
           resetPulses();
+          tailVyFilt = 0;
         }
       }
 
@@ -1064,6 +1129,12 @@
         player.vy += ay * dt;
         player.vy = clamp(player.vy, -VTERM * dpr, VTERM * dpr);
         player.y += player.vy * dt;
+
+        // Tail driver from actual motion (filtered player.vy)
+        {
+          const alpha = 1 - Math.exp(-dt / Math.max(1e-6, TAIL_VY_TAU_S));
+          tailVyFilt = tailVyFilt + alpha * (player.vy - tailVyFilt);
+        }
 
         player.tilt = clamp(-player.vy / (900 * dpr), -0.20, 0.20);
 
@@ -1119,6 +1190,8 @@
         }
       } else {
         player.tilt = 0;
+        // When idle, let tail settle quickly to avoid “ghost drift”
+        tailVyFilt *= 0.90;
       }
 
       updateHUD();
