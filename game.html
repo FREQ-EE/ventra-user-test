@@ -100,6 +100,23 @@
 
     canvas{ display:block; width:100%; height:100%; }
 
+    /* --- CRT overlay layer (DOM) --- */
+    #game{ position:relative; z-index:0; }
+    #crtOverlay{
+      position:absolute; inset:0;
+      pointer-events:none;
+      z-index:1;
+
+      opacity:0.30;
+      mix-blend-mode:soft-light;
+
+      background-repeat:repeat;
+      image-rendering:auto;
+    }
+    .hud{ z-index:3; }
+    .overlay{ z-index:4; }
+    /* --- end CRT overlay --- */
+
     .hud{
       position:absolute; top:10px; left:10px; right:10px;
       display:flex; justify-content:space-between; gap:10px;
@@ -189,6 +206,7 @@
       </div>
 
       <canvas id="game"></canvas>
+      <div id="crtOverlay" aria-hidden="true"></div>
 
       <div class="overlay" id="overlay">
         <div class="overlayBox">
@@ -206,7 +224,7 @@
     border-radius:16px;
     background:var(--card);
     color:var(--text);
-    max-width:480px;
+    max-width:720px;
     padding:18px;
   ">
     <h3 style="margin-top:0;font-family:Orbitron,sans-serif;font-size:14px;">
@@ -227,8 +245,11 @@
     
       <li style="margin:10px 0;">
         <strong>Firefox:</strong>
-        <span style="color:var(--muted); font-weight:400;">
-          Open <code>about:config</code> → set <code>dom.webmidi.enabled</code> to <code>true</code>, then refresh.
+        <span style="color:var(--muted); font-weight:400;"><br>
+          1) Close Firefox. Plug in Ventra. Reopen Firefox. (Otherwise Firefox may show no MIDI ports.)<br>
+          2) When prompted, <strong>Allow MIDI device access</strong> (and SysEx if requested).<br>
+          3) For music: click the speaker button once (autoplay is often blocked).<br>
+          If MIDI still does not work: open <code>about:config</code> → set <code>dom.webmidi.enabled</code> to <code>true</code> → refresh.
         </span>
       </li>
     
@@ -277,12 +298,229 @@
     const MONKEY_DRAW_W = 150;
     const MONKEY_DRAW_H = 150;
 
+    // ============================================================
+    // Monkey neon stack (SVG -> alpha mask -> tinted layers)
+    // ============================================================
+
+    // Stroke width simulation (CSS px)
+    const MONKEY_BASE_STROKE_PX = 4;
+    const MONKEY_GOLD_STROKE_PX = 2;
+    const MONKEY_RED_STROKE_PX  = 4;
+    const MONKEY_BLUE_STROKE_PX = 6;
+    const MONKEY_AQUA_STROKE_PX = 6;
+
+    // Colours
+    const MONKEY_BASE_COLOUR = '#FFFFFF';
+    const MONKEY_GOLD_COLOUR = '#FFCC33';
+    const MONKEY_RED_COLOUR  = '#CC0033';
+    const MONKEY_BLUE_COLOUR = '#0000FF';
+    const MONKEY_AQUA_COLOUR = '#00FFFF';
+
+    const MONKEY_BASE_ALPHA = 0.65;   // raise to ~1.2 behaviour by multi-pass (see below)
+    const MONKEY_GLOW_ALPHA = 1;  // gold/red/blue strength
+    const MONKEY_AURA_ALPHA = 1;  // aqua halo strength
+    const MONKEY_BASE_PASSES = 3;    // 2–4 boosts “white pop”
+
+    // Blur radii in CSS px (we multiply by dpr when applying to the device-px canvas)
+    const MONKEY_GLOW_BLUR_PX = 0.66;
+    const MONKEY_AURA_BLUR_PX = 4;
+
+    // Offsets in CSS px (we multiply by dpr when drawing)
+    const MONKEY_GOLD_OFF_CSS = { x: -0,  y: 4 };
+    const MONKEY_RED_OFF_CSS  = { x: -4, y: 0 };
+    const MONKEY_BLUE_OFF_CSS = { x: 4,  y: 0 };
+    const MONKEY_AQUA_OFF_CSS = { x: 0,  y: 0 };
+
+    // Cached alpha mask + a reusable tinted layer canvas
+    const monkeyMaskCanvas  = document.createElement('canvas');
+    const monkeyLayerCanvas = document.createElement('canvas');
+    let monkeyCacheW = 0;
+    let monkeyCacheH = 0;
+
+    function rebuildMonkeyCache(drawW, drawH) {
+      monkeyCacheW = drawW;
+      monkeyCacheH = drawH;
+
+      monkeyMaskCanvas.width = drawW;
+      monkeyMaskCanvas.height = drawH;
+      monkeyLayerCanvas.width = drawW;
+      monkeyLayerCanvas.height = drawH;
+
+      const mctx = monkeyMaskCanvas.getContext('2d');
+      mctx.clearRect(0, 0, drawW, drawH);
+
+      // Rasterise the SVG into an alpha mask at the current draw size.
+      // (We keep the RGB; we only use alpha via destination-in later.)
+      mctx.drawImage(monkeyImg, 0, 0, drawW, drawH);
+    }
+
+    function ensureMonkeyCache(drawW, drawH) {
+      if (!monkeyReady) return false;
+      if (drawW !== monkeyCacheW || drawH !== monkeyCacheH) rebuildMonkeyCache(drawW, drawH);
+      return true;
+    }
+
+    function makeTintedMonkeyLayer(colour, strokePxCss) {
+      const lctx = monkeyLayerCanvas.getContext('2d');
+      lctx.clearRect(0, 0, monkeyCacheW, monkeyCacheH);
+
+      const strokePx = Math.max(0, strokePxCss * dpr);
+      const half = Math.floor(strokePx / 2);
+
+      // Expand mask by drawing it multiple times in a square neighbourhood
+      // This simulates thicker strokes.
+      lctx.globalCompositeOperation = 'source-over';
+
+      for (let dx = -half; dx <= half; dx++) {
+        for (let dy = -half; dy <= half; dy++) {
+          lctx.drawImage(monkeyMaskCanvas, dx, dy);
+        }
+      }
+
+      // Keep only alpha
+      lctx.globalCompositeOperation = 'destination-in';
+      lctx.drawImage(monkeyMaskCanvas, 0, 0);
+
+      // Apply tint
+      lctx.globalCompositeOperation = 'source-atop';
+      lctx.fillStyle = colour;
+      lctx.fillRect(0, 0, monkeyCacheW, monkeyCacheH);
+
+      lctx.globalCompositeOperation = 'source-over';
+    }
+
+    function drawMonkeyNeon(x, y, tilt, drawW, drawH) {
+      if (!ensureMonkeyCache(drawW, drawH)) return;
+
+      // Placeholder hook for future motion-coupled offsets.
+      // For now it returns static offsets.
+      const goldOff = { x: MONKEY_GOLD_OFF_CSS.x * dpr, y: MONKEY_GOLD_OFF_CSS.y * dpr };
+      const redOff  = { x: MONKEY_RED_OFF_CSS.x  * dpr, y: MONKEY_RED_OFF_CSS.y  * dpr };
+      const blueOff = { x: MONKEY_BLUE_OFF_CSS.x * dpr, y: MONKEY_BLUE_OFF_CSS.y * dpr };
+      const aquaOff = { x: MONKEY_AQUA_OFF_CSS.x * dpr, y: MONKEY_AQUA_OFF_CSS.y * dpr };
+
+      const layers = [
+        { colour: MONKEY_AQUA_COLOUR, blurCss: MONKEY_AURA_BLUR_PX, dx: aquaOff.x, dy: aquaOff.y, stroke: MONKEY_AQUA_STROKE_PX, mode: 'hard-light' },
+        { colour: MONKEY_GOLD_COLOUR, blurCss: MONKEY_GLOW_BLUR_PX, dx: goldOff.x, dy: goldOff.y, stroke: MONKEY_GOLD_STROKE_PX, mode: 'normal' },
+        { colour: MONKEY_RED_COLOUR,  blurCss: MONKEY_GLOW_BLUR_PX, dx: redOff.x,  dy: redOff.y,  stroke: MONKEY_RED_STROKE_PX,  mode: 'normal' },
+        { colour: MONKEY_BLUE_COLOUR, blurCss: MONKEY_GLOW_BLUR_PX, dx: blueOff.x, dy: blueOff.y, stroke: MONKEY_BLUE_STROKE_PX, mode: 'normal' },
+        { colour: MONKEY_BASE_COLOUR, blurCss: 0,                  dx: 0,         dy: 0,          stroke: MONKEY_BASE_STROKE_PX, mode: 'normal' },
+      ];
+
+      for (const L of layers) {
+        makeTintedMonkeyLayer(L.colour, L.stroke);
+
+        ctx.save();
+        ctx.translate(x + L.dx, y + L.dy);
+        ctx.rotate(tilt);
+
+        ctx.filter = (L.blurCss > 0)
+          ? `blur(${(L.blurCss * dpr).toFixed(4)}px)`
+          : 'none';
+
+        if (L.mode === 'hard-light') {
+          ctx.globalCompositeOperation = 'hard-light';
+        } else {
+          ctx.globalCompositeOperation = 'source-over';
+        }
+
+        if (L.colour === MONKEY_BASE_COLOUR) ctx.globalAlpha = MONKEY_BASE_ALPHA;
+        else if (L.colour === MONKEY_AQUA_COLOUR) ctx.globalAlpha = MONKEY_AURA_ALPHA;
+        else ctx.globalAlpha = MONKEY_GLOW_ALPHA;
+
+        const passes = (L.colour === MONKEY_BASE_COLOUR) ? MONKEY_BASE_PASSES : 1;
+        for (let i = 0; i < passes; i++) {
+          ctx.drawImage(monkeyLayerCanvas, -drawW / 2, -drawH / 2, drawW, drawH);
+        }
+
+        ctx.restore();
+      }
+
+      ctx.globalAlpha = 1;
+      ctx.filter = 'none';
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
     const COLL_ROT_DEG = -24;
     const COLL_ROT = (COLL_ROT_DEG * Math.PI) / 180;
     const COLL_A_FRAC = 0.40;
     const COLL_B_FRAC = 0.15;
     const COLL_CX_OFF_FRAC = 0.05;
     const COLL_CY_OFF_FRAC = 0.03;
+
+    // ============================================================
+    // CRT overlay (DOM) - overlay-pattern.png (single-layer brick tile)
+    // ============================================================
+    const CRT_OPACITY = 0.30;          // 0..1
+    const CRT_REPEATS_X = 98;          // higher = smaller tiles = more repeats
+    const CRT_BRICK_OFFSET_FRAC = 1/2; // 0..1 (fraction of tile width)
+    const CRT_FILTER = 'contrast(0.75) brightness(0.85)';
+    const crtOverlay = document.getElementById('crtOverlay');
+
+    const crtImg = new Image();
+    let crtImgReady = false;
+    crtImg.onload = () => { crtImgReady = true; };
+    crtImg.onerror = (e) => { console.warn('Failed to load overlay-pattern.png', e); };
+    crtImg.src = './overlay-pattern.png';
+
+    // Cache to avoid regenerating data URLs every frame
+    let crtLastTilePx = 0;
+    let crtLastShiftPx = -1;
+    let crtLastUrl = '';
+
+    function updateCrtOverlay(w, h) {
+      if (!crtOverlay) return;
+
+      // Opacity can be set every frame (cheap)
+      crtOverlay.style.opacity = String(CRT_OPACITY);
+      crtOverlay.style.filter = CRT_FILTER;
+
+      if (!crtImgReady) return;
+
+      // Tile size in CSS pixels (not device pixels)
+      const tileCssPx = Math.max(2, Math.round((w / dpr) / CRT_REPEATS_X));
+      const shiftPx = Math.round(tileCssPx * CRT_BRICK_OFFSET_FRAC) % tileCssPx;
+
+      // Only regenerate when geometry changes
+      if (tileCssPx === crtLastTilePx && shiftPx === crtLastShiftPx && crtLastUrl) {
+        return;
+      }
+
+      // 1) Scale the source pattern into a single tile
+      const tile = document.createElement('canvas');
+      tile.width = tileCssPx;
+      tile.height = tileCssPx;
+      const tctx = tile.getContext('2d');
+
+      tctx.clearRect(0, 0, tileCssPx, tileCssPx);
+      tctx.drawImage(crtImg, 0, 0, tileCssPx, tileCssPx);
+
+      // 2) Build a "brick" tile: two rows tall, second row shifted in X
+      const brick = document.createElement('canvas');
+      brick.width = tileCssPx;
+      brick.height = tileCssPx * 2;
+      const bctx = brick.getContext('2d');
+
+      bctx.clearRect(0, 0, brick.width, brick.height);
+
+      // Row 0 (normal)
+      bctx.drawImage(tile, 0, 0);
+
+      // Row 1 (shifted with wrap)
+      bctx.drawImage(tile, -shiftPx, tileCssPx);
+      bctx.drawImage(tile, tileCssPx - shiftPx, tileCssPx);
+
+      const url = brick.toDataURL('image/png');
+
+      crtOverlay.style.backgroundImage = `url('${url}')`;
+      crtOverlay.style.backgroundRepeat = 'repeat';
+      crtOverlay.style.backgroundSize = `${tileCssPx}px ${tileCssPx * 2}px`;
+      crtOverlay.style.backgroundPosition = '0px 0px';
+
+      crtLastTilePx = tileCssPx;
+      crtLastShiftPx = shiftPx;
+      crtLastUrl = url;
+    }
 
     // ============================================================
     // WebMIDI (Channel 1, CC2) - Ventra status-only
@@ -499,7 +737,7 @@
 
     // Vertical response (tuned for softer early fall / gliding)
     const G = 2200;
-    const K_BASE = 70;
+    const K_BASE = 30;
     const K_BOOST = 1.15;
     const DAMP_BASE = 22;
     const VTERM = 2400;
@@ -745,11 +983,7 @@
       const drawH = MONKEY_DRAW_H * dpr;
 
       if (monkeyReady) {
-        ctx.save();
-        ctx.translate(player.x, player.y);
-        ctx.rotate(player.tilt);
-        ctx.drawImage(monkeyImg, -drawW / 2, -drawH / 2, drawW, drawH);
-        ctx.restore();
+        drawMonkeyNeon(player.x, player.y, player.tilt, drawW, drawH);
       } else {
         ctx.save();
         ctx.fillStyle = text;
@@ -783,6 +1017,8 @@
     let lastTs = 0;
     function step(ts) {
       const { w, h } = resizeCanvasToDisplaySize();
+      updateCrtOverlay(w, h);
+
       const dt = Math.min(0.033, Math.max(0.001, (ts - (lastTs || ts)) / 1000));
       lastTs = ts;
 
@@ -938,5 +1174,3 @@
   </script>
 </body>
 </html>
-
-
