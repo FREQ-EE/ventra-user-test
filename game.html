@@ -14,13 +14,32 @@
     :root { color-scheme: dark light; }
 
     :root{
+      /* Screen shaping */
+      --screen-radius: 30px;
+      --screen-curve: 0.0;            /* kept, but NOT used */
+      --screen-bloom: 0.25;
+      --screen-bloom-blur: 2px;
+      --screen-bloom-spread: 2px;
+
+      /* Glass curvature strength (highlight/vignette only) */
+      --glass-strength: 1.75;         /* 0.0 .. 2.0 */
+    }
+
+    :root{
       --bg:#0F1011; --card:#13151C; --text:#EDF4FA; --muted:#9AA4B2; --border:#262C3C;
       --accentA:#8B5CF6; --accentB:#EC4899; --warn:#FFB86B; --danger:#FF6B6B;
+
+      /* Game background gradient alphas (set from JS via GAME_BG_INTENSITY) */
+      --gA:0.18;
+      --gB:0.15;
+      --gC0:0.12;
+      --gC1:0.00;
     }
     @media (prefers-color-scheme: light){
       :root{
         --bg:#FFFFFF; --card:#FFFFFF; --text:#0B0D10; --muted:#556170; --border:#E5E7EB;
         --accentA:#7C3AED; --accentB:#DB2777; --warn:#B86B00; --danger:#B42318;
+        --gA:0.18; --gB:0.15; --gC0:0.12; --gC1:0.00;
       }
     }
 
@@ -66,7 +85,6 @@
 
     #ccPill { min-width: 86px; justify-content: center; }
 
-    /* Small icon button in pill form */
     button{ font:inherit; color:inherit; }
     .iconBtn{
       border:1px solid var(--border);
@@ -85,45 +103,105 @@
     .iconBtn[data-on="1"] .iconOn{ display:block; }
     .iconBtn[data-on="0"] .iconOff{ display:block; }
 
-    /* Game */
+    /* Game shell (4:3) */
     .gameShell{
       position:relative;
-      overflow:hidden;
-      border-radius:16px;
+      overflow:visible;
+      border-radius:var(--screen-radius);
       border:1px solid var(--border);
+
+      width:100%;
+      aspect-ratio: 4 / 3;
+      max-height: 78vh;
+
+      background-color:#000;
       background:
-        radial-gradient(900px 320px at 10% 0%, rgba(139,92,246,0.18), transparent 70%),
-        radial-gradient(900px 320px at 90% 0%, rgba(236,72,153,0.15), transparent 70%),
-        linear-gradient(180deg, rgba(0,0,0,0.12), rgba(0,0,0,0.00));
-      height: 460px;
+        radial-gradient(900px 320px at 10% 0%, rgba(139,92,246,var(--gA)), transparent 70%),
+        radial-gradient(900px 320px at 90% 0%, rgba(236,72,153,var(--gB)), transparent 70%),
+        linear-gradient(180deg, rgba(0,0,0,var(--gC0)), rgba(0,0,0,var(--gC1)));
+
+      box-shadow:
+        0 0 var(--screen-bloom-blur) var(--screen-bloom-spread) rgba(139,92,246, calc(0.25 * var(--screen-bloom))),
+        0 0 calc(var(--screen-bloom-blur) * 0.9) var(--screen-bloom-spread) rgba(236,72,153, calc(0.20 * var(--screen-bloom))),
+        0 0 calc(var(--screen-bloom-blur) * 1.2) 0 rgba(255,255,255, calc(0.06 * var(--screen-bloom)));
     }
 
-    canvas{ display:block; width:100%; height:100%; }
+    /* The glass "screen" MUST fill the shell */
+    .gameShell > .screen{
+      position:absolute;
+      inset:0;
+      overflow:hidden;
+      border-radius:inherit;
+    }
 
-    /* --- CRT overlay layer (DOM) --- */
-    #game{ position:relative; z-index:0; }
-    #crtOverlay{
-      position:absolute; inset:0;
+    /* Glass curvature illusion (highlight/vignette only) */
+    .gameShell > .screen::before{
+      content:"";
+      position:absolute;
+      inset:0;
       pointer-events:none;
-      z-index:1;
+      border-radius:inherit;
+      z-index:2;
 
-      opacity:0.30;
-      mix-blend-mode:soft-light;
+      background:
+        radial-gradient(140% 105% at 50% 16%,
+          rgba(255,255,255, calc(0.13 * var(--glass-strength))),
+          transparent 48%),
+        radial-gradient(140% 140% at 50% 55%,
+          transparent 56%,
+          rgba(0,0,0, calc(0.42 * var(--glass-strength))) 100%),
+        radial-gradient(120% 90% at 20% 10%,
+          rgba(255,255,255, calc(0.06 * var(--glass-strength))),
+          transparent 55%),
+        radial-gradient(120% 90% at 80% 10%,
+          rgba(255,255,255, calc(0.05 * var(--glass-strength))),
+          transparent 55%);
 
-      background-repeat:repeat;
-      image-rendering:auto;
+      mix-blend-mode: soft-light;
+      opacity: 1;
     }
-    .hud{ z-index:3; }
-    .overlay{ z-index:4; }
-    /* --- end CRT overlay --- */
+
+    .gameShell > .screen::after{
+      content:"";
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+      border-radius:inherit;
+      z-index:2;
+
+      background:
+        radial-gradient(110% 110% at 50% 50%,
+          transparent 60%,
+          rgba(0,0,0, calc(0.55 * var(--glass-strength))) 100%),
+        radial-gradient(90% 120% at 50% 110%,
+          rgba(0,0,0, calc(0.22 * var(--glass-strength))),
+          transparent 55%),
+        radial-gradient(120% 90% at -10% 50%,
+          rgba(0,0,0, calc(0.20 * var(--glass-strength))),
+          transparent 50%),
+        radial-gradient(120% 90% at 110% 50%,
+          rgba(0,0,0, calc(0.20 * var(--glass-strength))),
+          transparent 50%);
+
+      mix-blend-mode: multiply;
+      opacity: 0.95;
+    }
+
+    canvas{ display:block; width:100%; height:100%; position:relative; z-index:0; }
+
+    /* DOM CRT layer is kept but hidden (CRT is now drawn into the canvas so it gets barrel-distorted) */
+    #crtOverlay{ display:none; }
 
     .hud{
-      position:absolute; top:10px; left:10px; right:10px;
+      position:absolute;
+      top:10px; left:10px; right:10px;
       display:flex; justify-content:space-between; gap:10px;
       pointer-events:none;
       font-size:12px;
       color:var(--muted);
+      z-index:3;
     }
+
     .hudItem{
       padding:6px 10px;
       border-radius:999px;
@@ -134,12 +212,15 @@
     }
 
     .overlay{
-      position:absolute; inset:0;
+      position:absolute;
+      inset:0;
       display:grid; place-items:center;
       pointer-events:none;
       padding:18px;
       text-align:center;
+      z-index:4;
     }
+
     .overlayBox{
       max-width:620px; width:100%;
       border-radius:16px;
@@ -181,11 +262,9 @@
         <span class="pill" id="ccPill">CC2: 000</span>
 
         <button class="iconBtn" id="audioToggle" type="button" data-on="0" aria-label="Toggle music" title="Toggle music">
-          <!-- Speaker ON -->
           <svg class="iconOn" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path fill="currentColor" d="M3 10v4h4l5 4V6L7 10H3zm13.5 2a3.5 3.5 0 0 0-1.5-2.9v5.8A3.5 3.5 0 0 0 16.5 12zm0-7a1 1 0 0 0-.7 1.7A8 8 0 0 1 18 12a8 8 0 0 1-2.2 5.3 1 1 0 1 0 1.4 1.4A10 10 0 0 0 20 12a10 10 0 0 0-2.8-6.7 1 1 0 0 0-.7-.3z"/>
           </svg>
-          <!-- Speaker OFF -->
           <svg class="iconOff" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
             <path fill="currentColor" d="M3 10v4h4l5 4V6L7 10H3zm13.1 2 2.8 2.8 1.4-1.4L17.5 10.6l2.8-2.8-1.4-1.4L16.1 9.2l-2.8-2.8-1.4 1.4 2.8 2.8-2.8 2.8 1.4 1.4L16.1 12z"/>
           </svg>
@@ -199,96 +278,169 @@
       </div>
     </header>
 
-    <div class="gameShell" aria-label="Ventra game">
-      <div class="hud">
-        <div class="hudItem" id="hudTime">Time: 0.0 s</div>
-        <div class="hudItem" id="hudSpeed">Speed: 0</div>
-      </div>
+    <div class="gameShell" id="gameShell" aria-label="Ventra game">
+      <div class="screen">
+        <div class="hud">
+          <div class="hudItem" id="hudTime">Time: 0.0 s</div>
+          <div class="hudItem" id="hudSpeed">Speed: 0</div>
+        </div>
 
-      <canvas id="game"></canvas>
-      <div id="crtOverlay" aria-hidden="true"></div>
+        <canvas id="game"></canvas>
+        <div id="crtOverlay" aria-hidden="true"></div>
 
-      <div class="overlay" id="overlay">
-        <div class="overlayBox">
-          <p class="overlayTitle" id="overlayTitle">Ready</p>
-          <p class="overlayText" id="overlayText">
-            Start with <span class="kbd">three breath pulses</span>.
-          </p>
+        <div class="overlay" id="overlay">
+          <div class="overlayBox">
+            <p class="overlayTitle" id="overlayTitle">Ready</p>
+            <p class="overlayText" id="overlayText">
+              Start with <span class="kbd">three breath pulses</span>.
+            </p>
+          </div>
         </div>
       </div>
     </div>
+
+    <dialog id="helpDialog" style="
+      border:1px solid var(--border);
+      border-radius:16px;
+      background:var(--card);
+      color:var(--text);
+      max-width:720px;
+      padding:18px;
+    ">
+      <h3 style="margin-top:0;font-family:Orbitron,sans-serif;font-size:14px;">
+        Browser & MIDI Setup
+      </h3>
+
+      <p style="font-size:12px;color:var(--muted);">
+        Ventra uses WebMIDI. Support depends on browser.
+      </p>
+
+      <ul style="font-size:12px;line-height:1.6;padding-left:18px;margin:10px 0 0;">
+        <li style="margin:10px 0;">
+          <strong>Chrome / Edge (recommended):</strong>
+          <span style="color:var(--muted); font-weight:400;">
+            WebMIDI works natively. Plug in Ventra and refresh if not detected.
+          </span>
+        </li>
+
+        <li style="margin:10px 0;">
+          <strong>Firefox:</strong>
+          <span style="color:var(--muted); font-weight:400;"><br>
+            1) Close Firefox. Plug in Ventra. Reopen Firefox. (Otherwise Firefox may show no MIDI ports.)<br>
+            2) When prompted, <strong>Allow MIDI device access</strong> (and SysEx if requested).<br>
+            3) For music: click the speaker button once (autoplay is often blocked).<br>
+            If MIDI still does not work: open <code>about:config</code> → set <code>dom.webmidi.enabled</code> to <code>true</code> → refresh.
+          </span>
+        </li>
+
+        <li style="margin:10px 0;">
+          <strong>Safari (macOS):</strong>
+          <span style="color:var(--muted); font-weight:400;">
+            Develop → Experimental Features → enable WebMIDI. Restart browser if required.
+          </span>
+        </li>
+      </ul>
+
+      <div style="text-align:right;margin-top:12px;">
+        <button id="closeHelp" class="iconBtn" type="button">Close</button>
+      </div>
+    </dialog>
+
+    <audio id="bgm" loop preload="auto">
+      <source src="./music.ogg" type="audio/ogg">
+      <source src="./music.mp3" type="audio/mpeg">
+    </audio>
   </div>
-
-  <dialog id="helpDialog" style="
-    border:1px solid var(--border);
-    border-radius:16px;
-    background:var(--card);
-    color:var(--text);
-    max-width:720px;
-    padding:18px;
-  ">
-    <h3 style="margin-top:0;font-family:Orbitron,sans-serif;font-size:14px;">
-      Browser & MIDI Setup
-    </h3>
-
-    <p style="font-size:12px;color:var(--muted);">
-      Ventra uses WebMIDI. Support depends on browser.
-    </p>
-
-    <ul style="font-size:12px;line-height:1.6;padding-left:18px;margin:10px 0 0;">
-      <li style="margin:10px 0;">
-        <strong>Chrome / Edge (recommended):</strong>
-        <span style="color:var(--muted); font-weight:400;">
-          WebMIDI works natively. Plug in Ventra and refresh if not detected.
-        </span>
-      </li>
-    
-      <li style="margin:10px 0;">
-        <strong>Firefox:</strong>
-        <span style="color:var(--muted); font-weight:400;"><br>
-          1) Close Firefox. Plug in Ventra. Reopen Firefox. (Otherwise Firefox may show no MIDI ports.)<br>
-          2) When prompted, <strong>Allow MIDI device access</strong> (and SysEx if requested).<br>
-          3) For music: click the speaker button once (autoplay is often blocked).<br>
-          If MIDI still does not work: open <code>about:config</code> → set <code>dom.webmidi.enabled</code> to <code>true</code> → refresh.
-        </span>
-      </li>
-    
-      <li style="margin:10px 0;">
-        <strong>Safari (macOS):</strong>
-        <span style="color:var(--muted); font-weight:400;">
-          Develop → Experimental Features → enable WebMIDI. Restart browser if required.
-        </span>
-      </li>
-    </ul>
-
-    <div style="text-align:right;margin-top:12px;">
-      <button id="closeHelp" class="iconBtn" type="button">Close</button>
-    </div>
-  </dialog>
-
-  <audio id="bgm" loop preload="auto">
-    <source src="./music.ogg" type="audio/ogg">
-    <source src="./music.mp3" type="audio/mpeg">
-  </audio>
 
   <script>
     'use strict';
 
-    // ============================================================
-    // Utility
-    // ============================================================
     function clamp(n, lo, hi) { return Math.min(hi, Math.max(lo, n)); }
 
-    // ============================================================
-    // Debug toggles
-    // ============================================================
-    const SHOW_COLLISION_DEBUG = false;     // <- OFF
+    function expApproach(current, target, dt, tau) {
+      const a = 1 - Math.exp(-dt / Math.max(1e-6, tau));
+      return current + (target - current) * a;
+    }
+
+    const SHOW_COLLISION_DEBUG = false;
     const COLL_FOLLOWS_SPRITE_TILT = true;
     const DEBUG_COLL_COLOUR = '#00FFFF';
 
     // ============================================================
-    // Asset: monkey SVG loaded as image (same folder as game.html)
+    // Barrel distortion (lens bulge)
     // ============================================================
+    const BARREL_ENABLED = true;
+    const BARREL_K = 0.075;
+    const BARREL_SLICES = 90;
+
+    // ============================================================
+    // CRT (now rendered into the off-screen scene, so it gets barrel distortion)
+    // ============================================================
+    const CRT_OPACITY = 0.15;
+    const CRT_REPEATS_X = 98;
+    const CRT_BRICK_OFFSET_FRAC = 1/2;
+
+    // Canvas supports ctx.filter, but blend modes like "soft-light" vary by browser.
+    // We approximate: use 'overlay' if available, else 'source-over'.
+    const CRT_COMPOSITE = 'overlay';         // try: 'overlay', 'soft-light', 'multiply'
+    const CRT_CONTRAST = 0.66;
+    const CRT_BRIGHTNESS = 0.50;
+
+    const crtImg = new Image();
+    let crtImgReady = false;
+    crtImg.onload = () => { crtImgReady = true; };
+    crtImg.onerror = (e) => { console.warn('Failed to load overlay-pattern.png', e); };
+    crtImg.src = './overlay-pattern.png';
+
+    let crtPattern = null;
+    let crtPatternTilePx = 0;
+    let crtPatternShiftPx = -1;
+
+    function ensureCrtPattern(w, h, dpr) {
+      if (!crtImgReady) return null;
+
+      const tileCssPx = Math.max(2, Math.round((w / dpr) / CRT_REPEATS_X));
+      const shiftPx = Math.round(tileCssPx * CRT_BRICK_OFFSET_FRAC) % tileCssPx;
+
+      if (crtPattern && tileCssPx === crtPatternTilePx && shiftPx === crtPatternShiftPx) return crtPattern;
+
+      const tile = document.createElement('canvas');
+      tile.width = tileCssPx;
+      tile.height = tileCssPx;
+      const tctx = tile.getContext('2d');
+      tctx.clearRect(0, 0, tileCssPx, tileCssPx);
+      tctx.drawImage(crtImg, 0, 0, tileCssPx, tileCssPx);
+
+      const brick = document.createElement('canvas');
+      brick.width = tileCssPx;
+      brick.height = tileCssPx * 2;
+      const bctx = brick.getContext('2d');
+      bctx.clearRect(0, 0, brick.width, brick.height);
+      bctx.drawImage(tile, 0, 0);
+      bctx.drawImage(tile, -shiftPx, tileCssPx);
+      bctx.drawImage(tile, tileCssPx - shiftPx, tileCssPx);
+
+      // Convert to CanvasPattern for fast fill.
+      const pat = ctx.createPattern(brick, 'repeat');
+      crtPattern = pat;
+      crtPatternTilePx = tileCssPx;
+      crtPatternShiftPx = shiftPx;
+      return pat;
+    }
+
+    const GAME_BG_INTENSITY = 0.6;
+    const GAME_BG_BASE = { gA: 0.18, gB: 0.15, gC0: 0.12, gC1: 0.00 };
+
+    function applyGameBgIntensity() {
+      const r = document.documentElement;
+      const k = Math.max(0, GAME_BG_INTENSITY);
+      r.style.setProperty('--gA',  String(GAME_BG_BASE.gA  * k));
+      r.style.setProperty('--gB',  String(GAME_BG_BASE.gB  * k));
+      r.style.setProperty('--gC0', String(GAME_BG_BASE.gC0 * k));
+      r.style.setProperty('--gC1', String(GAME_BG_BASE.gC1 * k));
+    }
+    applyGameBgIntensity();
+
     const monkeyImg = new Image();
     let monkeyReady = false;
     monkeyImg.onload = () => { monkeyReady = true; };
@@ -298,78 +450,62 @@
     const MONKEY_DRAW_W = 150;
     const MONKEY_DRAW_H = 150;
 
-    // ============================================================
-    // Monkey neon stack (SVG -> alpha mask -> tinted layers)
-    // ============================================================
-
-    // Stroke width simulation (CSS px)
-    const MONKEY_BASE_STROKE_PX = 4;
-    const MONKEY_GOLD_STROKE_PX = 2;
+    const MONKEY_BASE_STROKE_PX = 2;
+    const MONKEY_GOLD_STROKE_PX = 4;
     const MONKEY_RED_STROKE_PX  = 4;
     const MONKEY_BLUE_STROKE_PX = 6;
     const MONKEY_AQUA_STROKE_PX = 6;
 
-    // Colours
     const MONKEY_BASE_COLOUR = '#FFFFFF';
     const MONKEY_GOLD_COLOUR = '#FFCC33';
     const MONKEY_RED_COLOUR  = '#CC0033';
-    const MONKEY_BLUE_COLOUR = '#0000FF';
+    const MONKEY_BLUE_COLOUR = '#00A3FF';
     const MONKEY_AQUA_COLOUR = '#00FFFF';
 
-    const MONKEY_BASE_ALPHA = 0.65;   // raise to ~1.2 behaviour by multi-pass (see below)
-    const MONKEY_GLOW_ALPHA = 1;      // gold/red/blue strength
-    const MONKEY_AURA_ALPHA = 1;      // aqua halo strength
-    const MONKEY_BASE_PASSES = 3;     // 2–4 boosts “white pop”
+    const MONKEY_BASE_ALPHA = 0.66;
+    const MONKEY_GLOW_ALPHA = 1;
+    const MONKEY_AURA_ALPHA = 1;
+    const MONKEY_BASE_PASSES = 3;
 
-    // Blur radii in CSS px (we multiply by dpr when applying to the device-px canvas)
     const MONKEY_GLOW_BLUR_PX = 0.66;
-    const MONKEY_AURA_BLUR_PX = 4;
+    const MONKEY_AURA_BLUR_PX = 2;
 
-    // Offsets in CSS px (we multiply by dpr when drawing)
     const MONKEY_GOLD_OFF_CSS = { x: -0,  y: 4 };
     const MONKEY_RED_OFF_CSS  = { x: -4,  y: 0 };
     const MONKEY_BLUE_OFF_CSS = { x: 4,   y: 0 };
     const MONKEY_AQUA_OFF_CSS = { x: 0,   y: 0 };
 
-    // ============================================================
-    // Monkey dynamic "tail" (echo offsets)
-    // ============================================================
-    // X tail responds to speed (capped by time)
-    const TAIL_X_CAP_S = 60;          // after this many seconds, X tail stops extending
-    const TAIL_X_MAX_CSS = 18;        // maximum lag in CSS px for the furthest echo (red)
+    const TAIL_X_CAP_S = 60;
+    const TAIL_X_MAX_CSS = 18;
+    const TAIL_Y_MAX_CSS = 20;
+    const TAIL_VY_FOR_MAX = 1200;
+    const TAIL_VY_TAU_S = 0.10;
+    const TAIL_SCALE_MAX = 0.08;
 
-    // Y tail responds to motion of the base (filtered player.vy)
-    const TAIL_Y_MAX_CSS = 35;        // maximum Y lag in CSS px for the furthest echo (red)
-    const TAIL_VY_FOR_MAX = 800;     // device px/s for full Y tail (tune)
-    const TAIL_VY_TAU_S = 0.10;       // seconds smoothing for vy-based tail
-
-    // Subtle growth with tail distance
-    const TAIL_SCALE_MAX = 0.06;      // 6% max growth for furthest echo
-
-    // Tail state
     let tailVyFilt = 0;
 
-    // Cached alpha mask + a reusable tinted layer canvas
     const monkeyMaskCanvas  = document.createElement('canvas');
     const monkeyLayerCanvas = document.createElement('canvas');
     let monkeyCacheW = 0;
     let monkeyCacheH = 0;
 
     function rebuildMonkeyCache(drawW, drawH) {
-      monkeyCacheW = drawW;
-      monkeyCacheH = drawH;
+      const CACHE_SCALE = 2;
+      const cw = Math.max(1, Math.round(drawW * CACHE_SCALE));
+      const ch = Math.max(1, Math.round(drawH * CACHE_SCALE));
 
-      monkeyMaskCanvas.width = drawW;
-      monkeyMaskCanvas.height = drawH;
-      monkeyLayerCanvas.width = drawW;
-      monkeyLayerCanvas.height = drawH;
+      monkeyCacheW = cw;
+      monkeyCacheH = ch;
+
+      monkeyMaskCanvas.width = cw;
+      monkeyMaskCanvas.height = ch;
+      monkeyLayerCanvas.width = cw;
+      monkeyLayerCanvas.height = ch;
 
       const mctx = monkeyMaskCanvas.getContext('2d');
-      mctx.clearRect(0, 0, drawW, drawH);
-
-      // Rasterise the SVG into an alpha mask at the current draw size.
-      // (We keep the RGB; we only use alpha via destination-in later.)
-      mctx.drawImage(monkeyImg, 0, 0, drawW, drawH);
+      mctx.setTransform(1, 0, 0, 1, 0, 0);
+      mctx.clearRect(0, 0, cw, ch);
+      mctx.drawImage(monkeyImg, 0, 0, cw, ch);
     }
 
     function ensureMonkeyCache(drawW, drawH) {
@@ -385,21 +521,16 @@
       const strokePx = Math.max(0, strokePxCss * dpr);
       const half = Math.floor(strokePx / 2);
 
-      // Expand mask by drawing it multiple times in a square neighbourhood
-      // This simulates thicker strokes.
       lctx.globalCompositeOperation = 'source-over';
-
       for (let dx = -half; dx <= half; dx++) {
         for (let dy = -half; dy <= half; dy++) {
           lctx.drawImage(monkeyMaskCanvas, dx, dy);
         }
       }
 
-      // Keep only alpha
       lctx.globalCompositeOperation = 'destination-in';
       lctx.drawImage(monkeyMaskCanvas, 0, 0);
 
-      // Apply tint
       lctx.globalCompositeOperation = 'source-atop';
       lctx.fillStyle = colour;
       lctx.fillRect(0, 0, monkeyCacheW, monkeyCacheH);
@@ -407,39 +538,25 @@
       lctx.globalCompositeOperation = 'source-over';
     }
 
-    function drawMonkeyNeon(x, y, tilt, drawW, drawH) {
+    function drawMonkeyNeon(x, y, tilt, drawW, drawH, extraScale = 1.0) {
       if (!ensureMonkeyCache(drawW, drawH)) return;
 
-      // ------------------------------------------------------------
-      // Dynamic echo offsets:
-      //  - X lag grows with speed (capped by time)
-      //  - Y lag grows with actual motion (filtered player.vy)
-      // ------------------------------------------------------------
       const speedFactor = clamp(world.speed / world.baseSpeed, 1, 3.2);
       const tCap = clamp(world.survive / TAIL_X_CAP_S, 0, 1);
 
-      // normalise speed to 0..1 using your established speedFactor range
       const xNorm = clamp((speedFactor - 1) / (3.2 - 1), 0, 1) * tCap;
-
-      // normalise vertical motion to 0..1 (tailVyFilt is in device px/s)
       const vNorm = clamp(Math.abs(tailVyFilt) / Math.max(1e-6, TAIL_VY_FOR_MAX), 0, 1);
-
-      // Direction: echoes trail opposite direction of travel.
-      // Canvas y increases downward. If vy > 0 (moving down), echoes go up (negative y).
       const ySign = (tailVyFilt >= 0) ? -1 : 1;
 
-      // Per-colour multipliers (ROYGBIV-ish “red furthest”)
-      const M_BLUE = 0.45; // closest echo
-      const M_GOLD = 0.70; // mid echo
-      const M_RED  = 1.00; // furthest echo
+      const M_BLUE = 0.45;
+      const M_GOLD = 0.70;
+      const M_RED  = 1.00;
 
-      // Base static offsets (still respected), plus dynamic tail
       const baseGold = { x: MONKEY_GOLD_OFF_CSS.x, y: MONKEY_GOLD_OFF_CSS.y };
       const baseRed  = { x: MONKEY_RED_OFF_CSS.x,  y: MONKEY_RED_OFF_CSS.y  };
       const baseBlue = { x: MONKEY_BLUE_OFF_CSS.x, y: MONKEY_BLUE_OFF_CSS.y };
       const baseAqua = { x: MONKEY_AQUA_OFF_CSS.x, y: MONKEY_AQUA_OFF_CSS.y };
 
-      // Dynamic lags (CSS px)
       const xLagBlue = -TAIL_X_MAX_CSS * xNorm * M_BLUE;
       const xLagGold = -TAIL_X_MAX_CSS * xNorm * M_GOLD;
       const xLagRed  = -TAIL_X_MAX_CSS * xNorm * M_RED;
@@ -448,15 +565,11 @@
       const yLagGold = (TAIL_Y_MAX_CSS * vNorm * M_GOLD) * ySign;
       const yLagRed  = (TAIL_Y_MAX_CSS * vNorm * M_RED ) * ySign;
 
-      // Convert to device px
       const goldOff = { x: (baseGold.x + xLagGold) * dpr, y: (baseGold.y + yLagGold) * dpr };
       const redOff  = { x: (baseRed.x  + xLagRed ) * dpr, y: (baseRed.y  + yLagRed ) * dpr };
       const blueOff = { x: (baseBlue.x + xLagBlue) * dpr, y: (baseBlue.y + yLagBlue) * dpr };
-
-      // Aura locked to base (no dynamic lag)
       const aquaOff = { x: baseAqua.x * dpr, y: baseAqua.y * dpr };
 
-      // Subtle scale increases with tail distance (furthest echo largest)
       const sBlue = 1 + (TAIL_SCALE_MAX * xNorm + TAIL_SCALE_MAX * 0.75 * vNorm) * M_BLUE;
       const sGold = 1 + (TAIL_SCALE_MAX * xNorm + TAIL_SCALE_MAX * 0.75 * vNorm) * M_GOLD;
       const sRed  = 1 + (TAIL_SCALE_MAX * xNorm + TAIL_SCALE_MAX * 0.75 * vNorm) * M_RED;
@@ -468,7 +581,7 @@
         { colour: MONKEY_GOLD_COLOUR, blurCss: MONKEY_GLOW_BLUR_PX, dx: goldOff.x, dy: goldOff.y, stroke: MONKEY_GOLD_STROKE_PX, mode: 'normal',     scale: sGold },
         { colour: MONKEY_RED_COLOUR,  blurCss: MONKEY_GLOW_BLUR_PX, dx: redOff.x,  dy: redOff.y,  stroke: MONKEY_RED_STROKE_PX,  mode: 'normal',     scale: sRed  },
         { colour: MONKEY_BLUE_COLOUR, blurCss: MONKEY_GLOW_BLUR_PX, dx: blueOff.x, dy: blueOff.y, stroke: MONKEY_BLUE_STROKE_PX, mode: 'normal',     scale: sBlue },
-        { colour: MONKEY_BASE_COLOUR, blurCss: 0,                  dx: 0,         dy: 0,          stroke: MONKEY_BASE_STROKE_PX, mode: 'normal',     scale: sBase },
+        { colour: MONKEY_BASE_COLOUR, blurCss: 0,                   dx: 0,         dy: 0,          stroke: MONKEY_BASE_STROKE_PX, mode: 'normal',     scale: sBase },
       ];
 
       for (const L of layers) {
@@ -477,7 +590,9 @@
         ctx.save();
         ctx.translate(x + L.dx, y + L.dy);
         ctx.rotate(tilt);
-        if (L.scale && L.scale !== 1) ctx.scale(L.scale, L.scale);
+
+        const sLocal = (L.scale && L.scale !== 1) ? (L.scale * extraScale) : extraScale;
+        if (sLocal !== 1) ctx.scale(sLocal, sLocal);
 
         ctx.filter = (L.blurCss > 0)
           ? `blur(${(L.blurCss * dpr).toFixed(4)}px)`
@@ -509,83 +624,33 @@
     const COLL_CX_OFF_FRAC = 0.05;
     const COLL_CY_OFF_FRAC = 0.03;
 
-    // ============================================================
-    // CRT overlay (DOM) - overlay-pattern.png (single-layer brick tile)
-    // ============================================================
-    const CRT_OPACITY = 0.30;          // 0..1
-    const CRT_REPEATS_X = 98;          // higher = smaller tiles = more repeats
-    const CRT_BRICK_OFFSET_FRAC = 1/2; // 0..1 (fraction of tile width)
-    const CRT_FILTER = 'contrast(0.75) brightness(0.85)';
-    const crtOverlay = document.getElementById('crtOverlay');
+    const REST_EVERY_S = 25;
+    const REST_COUNT = 3;
+    const REST_COUNT_STEP_S = 1.75;
+    const REST_PULSES = 3;
 
-    const crtImg = new Image();
-    let crtImgReady = false;
-    crtImg.onload = () => { crtImgReady = true; };
-    crtImg.onerror = (e) => { console.warn('Failed to load overlay-pattern.png', e); };
-    crtImg.src = './overlay-pattern.png';
+    const REST_FLYIN_SCALE_FROM = 1.00;
+    const REST_BASE_SCALE = 1.50;
+    const REST_PULSE_SCALE = 0.10;
 
-    // Cache to avoid regenerating data URLs every frame
-    let crtLastTilePx = 0;
-    let crtLastShiftPx = -1;
-    let crtLastUrl = '';
+    const REST_DIM_ALPHA = 0.18;
+    const REST_MOVE_TAU_S = 0.22;
+    const REST_RETURN_TAU_S = 0.18;
 
-    function updateCrtOverlay(w, h) {
-      if (!crtOverlay) return;
+    const REST_CENTRE_X_FRAC = 0.50;
+    const REST_CENTRE_Y_FRAC = 0.50;
 
-      // Opacity can be set every frame (cheap)
-      crtOverlay.style.opacity = String(CRT_OPACITY);
-      crtOverlay.style.filter = CRT_FILTER;
+    const REST_FLYIN_FRACTION = 0.55;
+    const REST_RETURN_FRACTION = 0.25;
+    const REST_UI_FADE_S = 0.25;
 
-      if (!crtImgReady) return;
-
-      // Tile size in CSS pixels (not device pixels)
-      const tileCssPx = Math.max(2, Math.round((w / dpr) / CRT_REPEATS_X));
-      const shiftPx = Math.round(tileCssPx * CRT_BRICK_OFFSET_FRAC) % tileCssPx;
-
-      // Only regenerate when geometry changes
-      if (tileCssPx === crtLastTilePx && shiftPx === crtLastShiftPx && crtLastUrl) {
-        return;
-      }
-
-      // 1) Scale the source pattern into a single tile
-      const tile = document.createElement('canvas');
-      tile.width = tileCssPx;
-      tile.height = tileCssPx;
-      const tctx = tile.getContext('2d');
-
-      tctx.clearRect(0, 0, tileCssPx, tileCssPx);
-      tctx.drawImage(crtImg, 0, 0, tileCssPx, tileCssPx);
-
-      // 2) Build a "brick" tile: two rows tall, second row shifted in X
-      const brick = document.createElement('canvas');
-      brick.width = tileCssPx;
-      brick.height = tileCssPx * 2;
-      const bctx = brick.getContext('2d');
-
-      bctx.clearRect(0, 0, brick.width, brick.height);
-
-      // Row 0 (normal)
-      bctx.drawImage(tile, 0, 0);
-
-      // Row 1 (shifted with wrap)
-      bctx.drawImage(tile, -shiftPx, tileCssPx);
-      bctx.drawImage(tile, tileCssPx - shiftPx, tileCssPx);
-
-      const url = brick.toDataURL('image/png');
-
-      crtOverlay.style.backgroundImage = `url('${url}')`;
-      crtOverlay.style.backgroundRepeat = 'repeat';
-      crtOverlay.style.backgroundSize = `${tileCssPx}px ${tileCssPx * 2}px`;
-      crtOverlay.style.backgroundPosition = '0px 0px';
-
-      crtLastTilePx = tileCssPx;
-      crtLastShiftPx = shiftPx;
-      crtLastUrl = url;
+    function restDurationS() {
+      return Math.max(0.2, REST_COUNT * REST_COUNT_STEP_S);
     }
 
-    // ============================================================
-    // WebMIDI (Channel 1, CC2) - Ventra status-only
-    // ============================================================
+    const SPEED_RAMP_PER_S = 16;
+    const SPEED_TAU_S = 0.60;
+
     const targetChannel1Based = 1;
     const targetCC = 2;
 
@@ -595,9 +660,7 @@
     let midiAccess = null;
     let currentInput = null;
 
-    function setVentraText(text) {
-      ventraPill.textContent = text;
-    }
+    function setVentraText(text) { ventraPill.textContent = text; }
 
     function detachCurrentInput() {
       if (currentInput) currentInput.onmidimessage = null;
@@ -647,9 +710,6 @@
 
     initMIDI();
 
-    // ============================================================
-    // Music toggle (simple audio loop)
-    // ============================================================
     const audioToggle = document.getElementById('audioToggle');
     const bgm = document.getElementById('bgm');
     const AUDIO_KEY = 'ventra_game_music';
@@ -669,9 +729,7 @@
       bgm.currentTime = 0;
     }
 
-    function setAudioUI(on) {
-      audioToggle.dataset.on = on ? '1' : '0';
-    }
+    function setAudioUI(on) { audioToggle.dataset.on = on ? '1' : '0'; }
 
     async function setAudio(on) {
       localStorage.setItem(AUDIO_KEY, on ? '1' : '0');
@@ -686,7 +744,6 @@
       }
     }
 
-    // default unmuted if unset
     const saved = localStorage.getItem(AUDIO_KEY);
     setAudioUI(saved === null ? true : saved === '1');
     if (saved === null) localStorage.setItem(AUDIO_KEY, '1');
@@ -696,11 +753,14 @@
       setAudio(next);
     });
 
-    // ============================================================
-    // Game
-    // ============================================================
     const canvas = document.getElementById('game');
-    const ctx = canvas.getContext('2d');
+    const viewCtx = canvas.getContext('2d');
+
+    const renderCanvas = document.createElement('canvas');
+    const ctx = renderCanvas.getContext('2d');
+
+    const distortCanvas = document.createElement('canvas');
+    const dctx = distortCanvas.getContext('2d');
 
     const overlay = document.getElementById('overlay');
     const overlayTitle = document.getElementById('overlayTitle');
@@ -715,7 +775,6 @@
       ccPill.textContent = `CC2: ${String(cc2).padStart(3, '0')}`;
     }
 
-    // Primary start/restart: breath pulses (requires Ventra connected)
     const PULSE_THRESHOLD = 32;
     const PULSE_WINDOW_S = 1.6;
     let prevCC2 = 0;
@@ -729,7 +788,7 @@
     }
 
     function registerPulse(dt) {
-      if (!currentInput) { // no device -> no play
+      if (!currentInput) {
         pulseCount = 0;
         pulseWindowT = 0;
         prevCC2 = cc2;
@@ -762,50 +821,130 @@
       }
     }
 
-    // Canvas sizing
     let dpr = 1;
     function resizeCanvasToDisplaySize() {
       const rect = canvas.getBoundingClientRect();
       dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
       const w = Math.max(320, Math.round(rect.width * dpr));
       const h = Math.max(240, Math.round(rect.height * dpr));
+
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
       }
+      if (renderCanvas.width !== w || renderCanvas.height !== h) {
+        renderCanvas.width = w;
+        renderCanvas.height = h;
+      }
+      if (distortCanvas.width !== w || distortCanvas.height !== h) {
+        distortCanvas.width = w;
+        distortCanvas.height = h;
+      }
+
       return { w, h };
     }
 
-    // Player state
+    function presentWithBarrel(w, h) {
+      if (!BARREL_ENABLED || BARREL_K <= 0) {
+        viewCtx.setTransform(1, 0, 0, 1, 0, 0);
+        viewCtx.clearRect(0, 0, w, h);
+        viewCtx.drawImage(renderCanvas, 0, 0);
+        return;
+      }
+
+      const K = BARREL_K;
+      const slices = clamp(Math.round(BARREL_SLICES * (w / (900 * dpr))), 50, 140);
+
+      const cx = w * 0.5;
+      const cy = h * 0.5;
+      const invCx = 1 / Math.max(1e-6, cx);
+      const invCy = 1 / Math.max(1e-6, cy);
+
+      dctx.setTransform(1, 0, 0, 1, 0, 0);
+      dctx.clearRect(0, 0, w, h);
+
+      const dx = w / slices;
+      for (let i = 0; i < slices; i++) {
+        const x0 = i * dx;
+        const x1 = (i + 1) * dx;
+        const xMid = (x0 + x1) * 0.5;
+
+        const xNorm = (xMid - cx) * invCx;
+        const s = 1 + K * (xNorm * xNorm);
+        const invS = 1 / s;
+
+        dctx.save();
+        dctx.beginPath();
+        dctx.rect(x0, 0, x1 - x0 + 0.5, h);
+        dctx.clip();
+
+        dctx.translate(0, cy);
+        dctx.scale(1, invS);
+        dctx.translate(0, -cy);
+
+        dctx.drawImage(renderCanvas, 0, 0);
+        dctx.restore();
+      }
+
+      viewCtx.setTransform(1, 0, 0, 1, 0, 0);
+      viewCtx.clearRect(0, 0, w, h);
+
+      const dy = h / slices;
+      for (let i = 0; i < slices; i++) {
+        const y0 = i * dy;
+        const y1 = (i + 1) * dy;
+        const yMid = (y0 + y1) * 0.5;
+
+        const yNorm = (yMid - cy) * invCy;
+        const s = 1 + K * (yNorm * yNorm);
+        const invS = 1 / s;
+
+        viewCtx.save();
+        viewCtx.beginPath();
+        viewCtx.rect(0, y0, w, y1 - y0 + 0.5);
+        viewCtx.clip();
+
+        viewCtx.translate(cx, 0);
+        viewCtx.scale(invS, 1);
+        viewCtx.translate(-cx, 0);
+
+        viewCtx.drawImage(distortCanvas, 0, 0);
+        viewCtx.restore();
+      }
+    }
+
     const player = { x: 0, y: 0, vy: 0, tilt: 0 };
 
     const world = {
       started: false,
       over: false,
       survive: 0,
-
+      playT: 0,
       baseSpeed: 180,
-      speedGain: 2,
       speed: 180,
-
       groundPad: 22,
       topPad: 22,
-
       distAcc: 0,
       nextSpawnDist: 760,
-      obstacles: []
+      obstacles: [],
+      nextRestAt: REST_EVERY_S,
+      restPending: false,
+      resting: false,
+      returning: false,
+      restT: 0,
+      returnT: 0,
+      restScale: 1,
+      restUiAlpha: 0
     };
 
-    // Vertical response (tuned for softer early fall / gliding)
     const G = 2200;
     const K_BASE = 30;
-    const K_BOOST = 1.15;
+    const K_BOOST = 1.2;
     const DAMP_BASE = 22;
     const VTERM = 2400;
 
-    // Floaty fall (release-only, fades out with speed)
-    const G_FALL_SCALE_MIN = 0.06;
-    const G_FALL_CC_MAX = 28;
+    const G_FALL_SCALE_MIN = 0.02;
+    const G_FALL_CC_MAX = 100;
 
     function updateHUD() {
       hudTime.textContent = `Time: ${world.survive.toFixed(1)} s`;
@@ -814,32 +953,40 @@
 
     function resetGame() {
       const { w, h } = resizeCanvasToDisplaySize();
-    
+
       world.started = false;
       world.over = false;
+
       world.survive = 0;
+      world.playT = 0;
+
       world.speed = world.baseSpeed;
+
       world.distAcc = 0;
       world.obstacles = [];
       world.nextSpawnDist = 620;
-    
-      const groundY = h - world.groundPad;
-    
-      // Spawn near vertical middle, then naturally drift down.
+
+      world.nextRestAt = REST_EVERY_S;
+      world.restPending = false;
+      world.resting = false;
+      world.returning = false;
+      world.restT = 0;
+      world.returnT = 0;
+      world.restScale = 1;
+      world.restUiAlpha = 0;
+
       player.x = Math.round(w * 0.22);
       player.y = Math.round(h * 0.50);
       player.vy = 0;
       player.tilt = 0;
 
-      // Tail state reset
       tailVyFilt = 0;
-    
+
       resetPulses();
-    
+
       overlay.style.display = 'grid';
       overlayTitle.textContent = 'Ready';
-      overlayText.innerHTML =
-        'Start with <span class="kbd">three breath pulses</span>.';
+      overlayText.innerHTML = 'Start with <span class="kbd">three breath pulses</span>';
       updateHUD();
     }
 
@@ -868,6 +1015,14 @@
         `Restart with <span class="kbd">three breath pulses</span>.`;
       resetPulses();
       stopMusic();
+
+      world.restPending = false;
+      world.resting = false;
+      world.returning = false;
+      world.restT = 0;
+      world.returnT = 0;
+      world.restScale = 1;
+      world.restUiAlpha = 0;
     }
 
     function spawnObstacle(w, h) {
@@ -876,6 +1031,7 @@
 
       const gap = 150;
       const kind = (Math.random() < 0.55) ? 'pipe' : 'block';
+      const vx = world.speed * dpr;
 
       if (kind === 'pipe') {
         const pipeW = 56 * dpr;
@@ -894,6 +1050,7 @@
           kind: 'pipe',
           x: w + 20 * dpr,
           w: pipeW,
+          vx,
           top: { y: ceilingY, w: pipeW, h: topH },
           bot: { y: botY,     w: pipeW, h: botH }
         });
@@ -905,7 +1062,8 @@
           x: w + 20 * dpr,
           y: groundY - blockH,
           w: blockW,
-          h: blockH
+          h: blockH,
+          vx
         });
       }
     }
@@ -998,6 +1156,33 @@
       ctx.restore();
     }
 
+    function drawCrtOverlayIntoScene(w, h) {
+      const pat = ensureCrtPattern(w, h, dpr);
+      if (!pat) return;
+
+      ctx.save();
+
+      // Approximate CSS filter: contrast() brightness()
+      ctx.filter = `contrast(${CRT_CONTRAST}) brightness(${CRT_BRIGHTNESS})`;
+
+      // Blend mode approximation (browser support varies; if unsupported it falls back)
+      ctx.globalCompositeOperation = CRT_COMPOSITE;
+
+      ctx.globalAlpha = CRT_OPACITY;
+      ctx.fillStyle = pat;
+
+      // Align pattern to pixel grid (reduce shimmer)
+      ctx.translate(0.5 * dpr, 0.5 * dpr);
+      ctx.fillRect(-0.5 * dpr, -0.5 * dpr, w + dpr, h + dpr);
+
+      ctx.restore();
+
+      // Reset (safety)
+      ctx.filter = 'none';
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
     function drawScene(w, h) {
       ctx.clearRect(0, 0, w, h);
 
@@ -1008,7 +1193,6 @@
       const accentB = cssVar('--accentB');
       const text = cssVar('--text');
       const muted = cssVar('--muted');
-      const warn = cssVar('--warn');
 
       // Ground
       ctx.save();
@@ -1047,7 +1231,8 @@
       const drawH = MONKEY_DRAW_H * dpr;
 
       if (monkeyReady) {
-        drawMonkeyNeon(player.x, player.y, player.tilt, drawW, drawH);
+        const s = (world.resting || world.returning) ? world.restScale : 1;
+        drawMonkeyNeon(player.x, player.y, player.tilt, drawW, drawH, s);
       } else {
         ctx.save();
         ctx.fillStyle = text;
@@ -1057,14 +1242,62 @@
 
         const pct = cc2 / 127;
         ctx.globalAlpha = 0.85;
-        ctx.fillStyle = (pct > 0.01) ? warn : muted;
+        ctx.fillStyle = (pct > 0.01) ? cssVar('--warn') : muted;
         ctx.beginPath();
         ctx.arc(player.x, player.y, Math.max(3 * dpr, Math.round(14 * dpr * (0.25 + 0.35 * pct))), 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
 
-      // Debug collision ellipse
+      // CRT overlay is part of the scene (so it gets barrel distortion)
+      drawCrtOverlayIntoScene(w, h);
+
+      // Breath phase overlay + 3-count (fades during fly-back)
+      if (world.started && (world.resting || world.returning)) {
+        const aUi = clamp(world.restUiAlpha, 0, 1);
+        if (aUi > 0) {
+          ctx.save();
+          ctx.globalAlpha = REST_DIM_ALPHA * aUi;
+          ctx.fillStyle = '#000';
+          ctx.fillRect(0, 0, w, h);
+          ctx.restore();
+
+          const dur = restDurationS();
+          const u = clamp(world.restT / Math.max(1e-6, dur), 0, 1);
+          const stepU = 1 / REST_COUNT;
+          const idx = clamp(Math.floor(u / stepU), 0, REST_COUNT - 1);
+          const countVal = Math.max(1, REST_COUNT - idx);
+
+          ctx.save();
+          ctx.globalAlpha = 0.92 * aUi;
+          ctx.fillStyle = text;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+
+          ctx.font = `${Math.round(18 * dpr)}px Orbitron, system-ui, sans-serif`;
+          ctx.fillText('Breathe', Math.round(w * 0.5), Math.round(h * 0.42));
+
+          ctx.font = `${Math.round(30 * dpr)}px Orbitron, system-ui, sans-serif`;
+          ctx.fillText(String(countVal), Math.round(w * 0.5), Math.round(h * 0.50));
+
+          ctx.font = `${Math.round(12 * dpr)}px "JetBrains Mono", ui-monospace, monospace`;
+          ctx.globalAlpha = 0.78 * aUi;
+          ctx.fillText('Control paused', Math.round(w * 0.5), Math.round(h * 0.58));
+          ctx.restore();
+        }
+      }
+
+      if (world.started && world.restPending && !world.resting && !world.returning) {
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        ctx.fillStyle = text;
+        ctx.textAlign = 'right';
+        ctx.textBaseline = 'bottom';
+        ctx.font = `${Math.round(11 * dpr)}px "JetBrains Mono", ui-monospace, monospace`;
+        ctx.fillText('Clearing…', Math.round(w - 10 * dpr), Math.round(h - 10 * dpr));
+        ctx.restore();
+      }
+
       if (SHOW_COLLISION_DEBUG) {
         const a = Math.max(8 * dpr, (drawW * COLL_A_FRAC));
         const b = Math.max(6 * dpr, (drawH * COLL_B_FRAC));
@@ -1077,16 +1310,13 @@
       }
     }
 
-    // Main loop
     let lastTs = 0;
     function step(ts) {
       const { w, h } = resizeCanvasToDisplaySize();
-      updateCrtOverlay(w, h);
 
       const dt = Math.min(0.033, Math.max(0.001, (ts - (lastTs || ts)) / 1000));
       lastTs = ts;
 
-      // If Ventra drops out, hard stop input + show overlay.
       if (!currentInput) {
         setCC2(0);
         if (world.started) {
@@ -1098,6 +1328,14 @@
           stopMusic();
           resetPulses();
           tailVyFilt = 0;
+
+          world.restPending = false;
+          world.resting = false;
+          world.returning = false;
+          world.restT = 0;
+          world.returnT = 0;
+          world.restScale = 1;
+          world.restUiAlpha = 0;
         }
       }
 
@@ -1106,102 +1344,206 @@
       const groundY = h - world.groundPad;
       const ceilingY = world.topPad;
 
-      // Start position: centred vertically (then naturally drifts down)
       if (world.started && !world.over) {
+        const inBreak = (world.resting || world.returning);
+
         world.survive += dt;
-        world.speed = world.baseSpeed + (world.speedGain * world.survive * 8);
+        if (!inBreak) world.playT += dt;
 
-        const pct = cc2 / 127;
-        const maxLift = (groundY - 14 * dpr) - (ceilingY + 14 * dpr);
-        const targetY = (groundY - 14 * dpr) - (pct * maxLift);
+        const targetSpeed = world.baseSpeed + SPEED_RAMP_PER_S * world.playT;
+        world.speed = expApproach(world.speed, targetSpeed, dt, SPEED_TAU_S);
 
-        const speedFactor = clamp(world.speed / world.baseSpeed, 1, 3.2);
-        const K = K_BASE * (1 + K_BOOST * (speedFactor - 1));
-        const DAMP = DAMP_BASE * (0.95 + 0.25 * (speedFactor - 1));
-
-        const speedFade = clamp((speedFactor - 1) / (3.2 - 1), 0, 1);
-        const ccFade = clamp(cc2 / G_FALL_CC_MAX, 0, 1);
-        const fallScale = (G_FALL_SCALE_MIN + (1 - G_FALL_SCALE_MIN) * ccFade);
-        const gEff = G * (fallScale + (1 - fallScale) * speedFade);
-
-        let ay = (K * (targetY - player.y)) - (DAMP * player.vy) + gEff;
-
-        player.vy += ay * dt;
-        player.vy = clamp(player.vy, -VTERM * dpr, VTERM * dpr);
-        player.y += player.vy * dt;
-
-        // Tail driver from actual motion (filtered player.vy)
-        {
-          const alpha = 1 - Math.exp(-dt / Math.max(1e-6, TAIL_VY_TAU_S));
-          tailVyFilt = tailVyFilt + alpha * (player.vy - tailVyFilt);
+        if (!world.restPending && !inBreak && world.playT >= world.nextRestAt) {
+          world.restPending = true;
         }
 
-        player.tilt = clamp(-player.vy / (900 * dpr), -0.20, 0.20);
-
-        const floorY = groundY - 14 * dpr;
-        if (player.y > floorY) { player.y = floorY; if (player.vy > 0) player.vy = 0; }
-        const ceilY = ceilingY + 14 * dpr;
-        if (player.y < ceilY) { player.y = ceilY; if (player.vy < 0) player.vy = 0; }
-
-        // Obstacles: reduced density (larger spawn distances)
-        const t = world.survive;
-        const startMean = 760 * dpr;
-        const endMean = 560 * dpr;
-        const ease = clamp(t / 18, 0, 1);
-        const mean = startMean + (endMean - startMean) * ease;
-        const jitter = 0.18;
-
-        world.distAcc += (world.speed * dpr) * dt;
-        if (world.distAcc >= world.nextSpawnDist) {
-          world.distAcc = 0;
-          spawnObstacle(w, h);
-          const r = (Math.random() * 2 - 1) * jitter;
-          world.nextSpawnDist = Math.max(420 * dpr, mean * (1 + r));
+        for (const ob of world.obstacles) {
+          const vx = (typeof ob.vx === 'number') ? ob.vx : (world.speed * dpr);
+          ob.x -= vx * dt;
         }
-
-        const dx = (world.speed * dpr) * dt;
-        for (const ob of world.obstacles) ob.x -= dx;
 
         while (world.obstacles.length && (world.obstacles[0].x + (world.obstacles[0].w || world.obstacles[0].top.w)) < -40 * dpr) {
           world.obstacles.shift();
         }
 
-        // Collision
-        const drawW = MONKEY_DRAW_W * dpr;
-        const drawH = MONKEY_DRAW_H * dpr;
-        const a = Math.max(8 * dpr, (drawW * COLL_A_FRAC));
-        const b = Math.max(6 * dpr, (drawH * COLL_B_FRAC));
-        const collTheta = COLL_ROT + (COLL_FOLLOWS_SPRITE_TILT ? player.tilt : 0);
+        if (world.restPending && !inBreak && world.obstacles.length === 0) {
+          world.restPending = false;
+          world.resting = true;
+          world.returning = false;
+          world.restT = 0;
+          world.returnT = 0;
+          world.restScale = REST_FLYIN_SCALE_FROM;
+          world.restUiAlpha = 1;
+          world.distAcc = 0;
+          player.vy = 0;
+          player.tilt = 0;
+          tailVyFilt = 0;
+        }
 
-        const cx = player.x + (drawW * COLL_CX_OFF_FRAC);
-        const cy = player.y + (drawH * COLL_CY_OFF_FRAC);
+        if (world.resting) {
+          world.restT += dt;
 
-        for (const ob of world.obstacles) {
-          if (ob.kind === 'pipe') {
-            if (
-              ellipseRectHit(cx, cy, a, b, collTheta, ob.x, ob.top.y, ob.top.w, ob.top.h) ||
-              ellipseRectHit(cx, cy, a, b, collTheta, ob.x, ob.bot.y, ob.bot.w, ob.bot.h)
-            ) { gameOver(); break; }
+          const dur = restDurationS();
+          const u = clamp(world.restT / Math.max(1e-6, dur), 0, 1);
+
+          const centreX = Math.round(w * REST_CENTRE_X_FRAC);
+          const centreY = Math.round(h * REST_CENTRE_Y_FRAC);
+
+          player.x = expApproach(player.x, centreX, dt, REST_MOVE_TAU_S);
+          player.y = expApproach(player.y, centreY, dt, REST_MOVE_TAU_S);
+
+          player.vy = 0;
+          player.tilt = 0;
+
+          const flyU = clamp(u / Math.max(1e-6, REST_FLYIN_FRACTION), 0, 1);
+          const baseScale = REST_FLYIN_SCALE_FROM + (REST_BASE_SCALE - REST_FLYIN_SCALE_FROM) * flyU;
+
+          const phase = u * REST_PULSES * Math.PI * 2;
+          const pulse01 = 0.5 - 0.5 * Math.cos(phase);
+          world.restScale = baseScale * (1 + REST_PULSE_SCALE * pulse01);
+
+          tailVyFilt = expApproach(tailVyFilt, 0, dt, 0.06);
+
+          if (world.restT >= dur) {
+            world.restT = dur;
+            world.resting = false;
+            world.returning = true;
+            world.returnT = 0;
+            world.restUiAlpha = 1;
+
+            player.vy = 0;
+            player.tilt = 0;
+            tailVyFilt = 0;
+
+            world.nextRestAt += REST_EVERY_S;
+          }
+        }
+
+        if (world.returning) {
+          world.returnT += dt;
+
+          const dur = restDurationS();
+          const returnS = Math.max(0.05, dur * REST_RETURN_FRACTION);
+
+          const laneX = Math.round(w * 0.22);
+          const centreY = Math.round(h * REST_CENTRE_Y_FRAC);
+
+          world.restUiAlpha = clamp(1 - (world.returnT / Math.max(1e-6, REST_UI_FADE_S)), 0, 1);
+
+          player.x = expApproach(player.x, laneX, dt, REST_RETURN_TAU_S);
+          player.y = expApproach(player.y, centreY, dt, REST_RETURN_TAU_S);
+
+          world.restScale = expApproach(world.restScale, 1, dt, REST_RETURN_TAU_S);
+
+          player.vy = 0;
+          player.tilt = 0;
+          tailVyFilt = expApproach(tailVyFilt, 0, dt, 0.06);
+
+          if (world.returnT >= returnS) {
+            world.returning = false;
+            world.returnT = 0;
+            world.restUiAlpha = 0;
+            world.restScale = 1;
+
+            player.x = laneX;
+            player.vy = 0;
+            player.tilt = 0;
+            tailVyFilt = 0;
+
+            world.distAcc = 0;
+          }
+        }
+
+        if (!world.resting && !world.returning) {
+          const pct = cc2 / 127;
+          const maxLift = (groundY - 14 * dpr) - (ceilingY + 14 * dpr);
+          const targetY = (groundY - 14 * dpr) - (pct * maxLift);
+
+          const speedFactor = clamp(world.speed / world.baseSpeed, 1, 3.2);
+          const K = K_BASE * (1 + K_BOOST * (speedFactor - 1));
+          const DAMP = DAMP_BASE * (0.95 + 0.25 * (speedFactor - 1));
+
+          const speedFade = clamp((speedFactor - 1) / (3.2 - 1), 0, 1);
+          const ccFade = clamp(cc2 / G_FALL_CC_MAX, 0, 1);
+          const fallScale = (G_FALL_SCALE_MIN + (1 - G_FALL_SCALE_MIN) * ccFade);
+          const gEff = G * (fallScale + (1 - fallScale) * speedFade);
+
+          let ay = (K * (targetY - player.y)) - (DAMP * player.vy) + gEff;
+
+          player.vy += ay * dt;
+          player.vy = clamp(player.vy, -VTERM * dpr, VTERM * dpr);
+          player.y += player.vy * dt;
+
+          {
+            const alpha = 1 - Math.exp(-dt / Math.max(1e-6, TAIL_VY_TAU_S));
+            tailVyFilt = tailVyFilt + alpha * (player.vy - tailVyFilt);
+          }
+
+          player.tilt = clamp(-player.vy / (900 * dpr), -0.20, 0.20);
+
+          const floorY = groundY - 14 * dpr;
+          if (player.y > floorY) { player.y = floorY; if (player.vy > 0) player.vy = 0; }
+          const ceilY = ceilingY + 14 * dpr;
+          if (player.y < ceilY) { player.y = ceilY; if (player.vy < 0) player.vy = 0; }
+
+          const t = world.playT;
+          const startMean = 760 * dpr;
+          const endMean = 560 * dpr;
+          const ease = clamp(t / 18, 0, 1);
+          const mean = startMean + (endMean - startMean) * ease;
+          const jitter = 0.18;
+
+          world.distAcc += (world.speed * dpr) * dt;
+
+          if (!world.restPending) {
+            if (world.distAcc >= world.nextSpawnDist) {
+              world.distAcc = 0;
+              spawnObstacle(w, h);
+              const r = (Math.random() * 2 - 1) * jitter;
+              world.nextSpawnDist = Math.max(420 * dpr, mean * (1 + r));
+            }
           } else {
-            if (ellipseRectHit(cx, cy, a, b, collTheta, ob.x, ob.y, ob.w, ob.h)) {
-              gameOver(); break;
+            world.distAcc = Math.min(world.distAcc, world.nextSpawnDist - 0.001);
+          }
+
+          const drawW = MONKEY_DRAW_W * dpr;
+          const drawH = MONKEY_DRAW_H * dpr;
+          const a = Math.max(8 * dpr, (drawW * COLL_A_FRAC));
+          const b = Math.max(6 * dpr, (drawH * COLL_B_FRAC));
+          const collTheta = COLL_ROT + (COLL_FOLLOWS_SPRITE_TILT ? player.tilt : 0);
+
+          const cx = player.x + (drawW * COLL_CX_OFF_FRAC);
+          const cy = player.y + (drawH * COLL_CY_OFF_FRAC);
+
+          for (const ob of world.obstacles) {
+            if (ob.kind === 'pipe') {
+              if (
+                ellipseRectHit(cx, cy, a, b, collTheta, ob.x, ob.top.y, ob.top.w, ob.top.h) ||
+                ellipseRectHit(cx, cy, a, b, collTheta, ob.x, ob.bot.y, ob.bot.w, ob.bot.h)
+              ) { gameOver(); break; }
+            } else {
+              if (ellipseRectHit(cx, cy, a, b, collTheta, ob.x, ob.y, ob.w, ob.h)) {
+                gameOver(); break;
+              }
             }
           }
         }
       } else {
         player.tilt = 0;
-        // When idle, let tail settle quickly to avoid “ghost drift”
         tailVyFilt *= 0.90;
+        world.restScale = 1;
+        world.restUiAlpha = 0;
       }
 
       updateHUD();
+
+      // Scene -> offscreen (includes CRT), then barrel -> onscreen
       drawScene(w, h);
+      presentWithBarrel(w, h);
+
       requestAnimationFrame(step);
     }
 
-    // ============================================================
-    // Single MIDI message handler
-    // ============================================================
     function onMIDIMessage(e) {
       const data = e.data;
       if (!data || data.length < 3) return;
@@ -1215,20 +1557,12 @@
       }
     }
 
-    // ============================================================
-    // Help dialog
-    // ============================================================
     const helpBtn = document.getElementById('helpBtn');
     const helpDialog = document.getElementById('helpDialog');
     const closeHelp = document.getElementById('closeHelp');
 
-    helpBtn.addEventListener('click', () => {
-      helpDialog.showModal();
-    });
-
-    closeHelp.addEventListener('click', () => {
-      helpDialog.close();
-    });
+    helpBtn.addEventListener('click', () => { helpDialog.showModal(); });
+    closeHelp.addEventListener('click', () => { helpDialog.close(); });
 
     helpDialog.addEventListener('click', (e) => {
       const rect = helpDialog.getBoundingClientRect();
@@ -1240,7 +1574,6 @@
       if (!inside) helpDialog.close();
     });
 
-    // Boot
     resetGame();
     setCC2(0);
     requestAnimationFrame(step);
