@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Ventra · EXHALE//ASCEND</title>
+  <title>EXHALE//ASCEND</title>
 
   <!-- Fonts -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,6 +22,9 @@
       --warn:#FFB86B;
       --danger:#FF6B6B;
       --border:#262C3C;
+
+      /* Rounded corner control (CSS px) */
+      --screen-radius-px: 0px;
     }
 
     html, body { height: 100%; }
@@ -39,10 +42,14 @@
     /* Single visible element: the canvas area. Outside stays pure black. */
     .gameShell{
       position:relative;
-      width:min(96vw, 980px);
+      width:min(98vw, 1100px);
       aspect-ratio: 4 / 3;
-      max-height: 92vh;
+      max-height: 95vh;
       background:#000;
+
+      /* Rounded corners (clips the canvas) */
+      border-radius: var(--screen-radius-px);
+      overflow:hidden;
     }
 
     canvas{
@@ -54,6 +61,9 @@
       user-select:none;
       -webkit-user-select:none;
       touch-action:manipulation;
+
+      /* Keep canvas edges aligned with shell rounding */
+      border-radius: var(--screen-radius-px);
     }
   </style>
 </head>
@@ -71,6 +81,8 @@
   <script>
     'use strict';
 
+    let nowS = 0;
+
     function clamp(n, lo, hi) { return Math.min(hi, Math.max(lo, n)); }
 
     function expApproach(current, target, dt, tau) {
@@ -81,6 +93,12 @@
     const SHOW_COLLISION_DEBUG = false;
     const COLL_FOLLOWS_SPRITE_TILT = true;
     const DEBUG_COLL_COLOUR = '#00FFFF';
+
+    // ============================================================
+    // Screen presentation (rounded corners)
+    // ============================================================
+    // CSS pixels; applied to --screen-radius-px.
+    const SCREEN_CORNER_RADIUS_PX = 70;
 
     // ============================================================
     // Barrel distortion (lens bulge)
@@ -113,8 +131,8 @@
     // ============================================================
     // CRT (rendered into the off-screen scene, so it gets barrel distortion)
     // ============================================================
-    const CRT_OPACITY = 0.30;
-    const CRT_REPEATS_X = 98;
+    const CRT_OPACITY = 0.12;
+    const CRT_REPEATS_X = 120;
     const CRT_BRICK_OFFSET_FRAC = 1/2;
 
     const CRT_COMPOSITE = 'soft-light';   // browser-dependent support
@@ -132,6 +150,104 @@
     let crtPatternShiftPx = -1;
 
     // ============================================================
+    // Film grain / noise layer (drawn on top of the scene)
+    // ============================================================
+    const NOISE_ENABLED = true;
+    const NOISE_ALPHA = 0.04;          // 0..1 (primary intensity control)
+    const NOISE_COMPOSITE = 'overlay'; // 'overlay'/'soft-light'/'source-over'
+    const NOISE_TILE_PX = 512;         // CSS px-ish target; actual is scaled by dpr
+    const NOISE_UPDATE_HZ = 24;        // how often noise regenerates (per second)
+
+    const noiseCanvas = document.createElement('canvas');
+    const nctx = noiseCanvas.getContext('2d');
+    let noisePattern = null;
+    let noiseLastW = 0;
+    let noiseLastH = 0;
+    let noiseLastUpdateT = 0;
+    let noiseSeed = 1337;
+
+    function lcgRand() {
+      // Deterministic small PRNG (fast, stable across browsers).
+      noiseSeed = (noiseSeed * 1664525 + 1013904223) >>> 0;
+      return noiseSeed / 4294967296;
+    }
+
+    function ensureNoisePattern(w, h, dprLocal, tsSeconds) {
+      if (!NOISE_ENABLED || NOISE_ALPHA <= 0) return null;
+
+      // Keep a roughly constant grain size in CSS px by scaling with dpr.
+      const tilePx = Math.max(64, Math.round(NOISE_TILE_PX * dprLocal));
+      const needsResize = (noiseCanvas.width !== tilePx || noiseCanvas.height !== tilePx);
+
+      const updateInterval = 1 / Math.max(1, NOISE_UPDATE_HZ);
+      const needsUpdate = (tsSeconds - noiseLastUpdateT) >= updateInterval;
+
+      if (needsResize) {
+        noiseCanvas.width = tilePx;
+        noiseCanvas.height = tilePx;
+        noisePattern = null;
+      }
+
+      if (needsResize || needsUpdate || !noisePattern || w !== noiseLastW || h !== noiseLastH) {
+        // Regenerate pixels.
+        const img = nctx.createImageData(noiseCanvas.width, noiseCanvas.height);
+        const data = img.data;
+
+        // Subtle grain: biased towards midtones.
+        for (let i = 0; i < data.length; i += 4) {
+          // Triangular distribution around ~0.5 for softer grain
+          const r = (lcgRand() + lcgRand()) * 0.5;     // 0..1
+          const v = Math.floor(255 * r);
+          data[i + 0] = v;
+          data[i + 1] = v;
+          data[i + 2] = v;
+          data[i + 3] = 255;
+        }
+
+        nctx.putImageData(img, 0, 0);
+
+        // Pattern can be created from the main scene ctx later; store canvas only here.
+        noiseLastUpdateT = tsSeconds;
+        noiseLastW = w;
+        noiseLastH = h;
+        noisePattern = null; // force re-create on scene ctx
+      }
+
+      return noiseCanvas;
+    }
+
+    function drawFilmGrain(w, h, tsSeconds) {
+      if (!NOISE_ENABLED || NOISE_ALPHA <= 0) return;
+
+      const src = ensureNoisePattern(w, h, dpr, tsSeconds);
+      if (!src) return;
+
+      // Pattern must be created on the destination context (ctx).
+      if (!noisePattern) noisePattern = ctx.createPattern(src, 'repeat');
+      if (!noisePattern) return;
+
+      ctx.save();
+      ctx.globalAlpha = NOISE_ALPHA;
+      ctx.globalCompositeOperation = NOISE_COMPOSITE;
+
+      // Avoid smoothing so grain stays crisp.
+      ctx.imageSmoothingEnabled = false;
+
+      // Slight drift to avoid static pattern feel (cheap motion).
+      const drift = (tsSeconds * 23.0) % (src.width || 1);
+      ctx.translate(-drift, -drift);
+
+      ctx.fillStyle = noisePattern;
+      ctx.fillRect(drift, drift, w + src.width, h + src.height);
+
+      ctx.restore();
+
+      ctx.imageSmoothingEnabled = true;
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
+    // ============================================================
     // Assets
     // ============================================================
     const monkeyImg = new Image();
@@ -143,7 +259,7 @@
     const MONKEY_DRAW_W = 150;
     const MONKEY_DRAW_H = 150;
 
-    const MONKEY_BASE_STROKE_PX = 2;
+    const MONKEY_BASE_STROKE_PX = 4;
     const MONKEY_GOLD_STROKE_PX = 4;
     const MONKEY_RED_STROKE_PX  = 4;
     const MONKEY_BLUE_STROKE_PX = 6;
@@ -151,17 +267,17 @@
 
     const MONKEY_BASE_COLOUR = '#FFFFFF';
     const MONKEY_GOLD_COLOUR = '#FFCC33';
-    const MONKEY_RED_COLOUR  = '#CC0033';
+    const MONKEY_RED_COLOUR  = '#69003a';
     const MONKEY_BLUE_COLOUR = '#00A3FF';
     const MONKEY_AQUA_COLOUR = '#00FFFF';
 
-    const MONKEY_BASE_ALPHA = 0.66;
+    const MONKEY_BASE_ALPHA = 0.6;
     const MONKEY_GLOW_ALPHA = 1;
-    const MONKEY_AURA_ALPHA = 1;
-    const MONKEY_BASE_PASSES = 3;
+    const MONKEY_AURA_ALPHA = 0.7;
+    const MONKEY_BASE_PASSES = 2;
 
-    const MONKEY_GLOW_BLUR_PX = 0.66;
-    const MONKEY_AURA_BLUR_PX = 2;
+    const MONKEY_GLOW_BLUR_PX = 1.25;
+    const MONKEY_AURA_BLUR_PX = 8;
 
     const MONKEY_GOLD_OFF_CSS = { x: -0,  y: 4 };
     const MONKEY_RED_OFF_CSS  = { x: -4,  y: 0 };
@@ -299,8 +415,9 @@
     // ============================================================
     // Canvas setup
     // ============================================================
+    const gameShell = document.getElementById('gameShell');
     const canvas = document.getElementById('game');
-    const viewCtx = canvas.getContext('2d', { alpha: false });
+    const viewCtx = canvas.getContext('2d', { alpha: true });
 
     const renderCanvas = document.createElement('canvas');
     const ctx = renderCanvas.getContext('2d');
@@ -823,6 +940,9 @@
     // ============================================================
     const UI_BOTTOM_BAND_PX = 56; // CSS px reserved for bottom controls
 
+    // Extra horizontal inset to keep UI away from rounded corners (fraction of radius)
+    const UI_CORNER_INSET_FRAC = 0.60; // try 0.50..0.80
+
     const ui = {
       musicRect: null,
       helpRect: null,
@@ -853,6 +973,16 @@
       c.arcTo(x, y + h, x, y, rr);
       c.arcTo(x, y, x + w, y, rr);
       c.closePath();
+    }
+
+    function clipSceneToScreen(w, h) {
+      const r = Math.max(0, Math.round(SCREEN_CORNER_RADIUS_PX * dpr));
+      if (r <= 0) return;
+
+      ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0); // ensure clip path is in canvas pixel space
+      roundRectPath(ctx, 0, 0, w, h, r);
+      ctx.clip();
     }
 
     function drawPillAt(x, y, w, h, fillAlpha = 0.28, borderAlpha = 0.40) {
@@ -1230,9 +1360,9 @@
     // ============================================================
     // Drawing
     // ============================================================
-    const GLASS_STRENGTH = 1.0;   // 0..2 (visual)
+    const GLASS_STRENGTH = 0.2;   // 0..2 (visual)
     const GLASS_VIGNETTE = 0.9;   // 0..1
-    const GLASS_HIGHLIGHT = 0.8;  // 0..1
+    const GLASS_HIGHLIGHT = 2;  // 0..1
 
     function drawGlassShading(w, h) {
       if (GLASS_STRENGTH <= 0) return;
@@ -1264,7 +1394,11 @@
     }
 
     function drawScene(w, h) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, w, h);
+
+      // Apply screen rounding in SCENE space (pre-barrel)
+      clipSceneToScreen(w, h);
 
       const border = cssVar('--border');
       const accentA = cssVar('--accentA');
@@ -1285,7 +1419,11 @@
       const s = uiScalePx();
       const m = Math.round(10 * s * dpr);
       const by = h - m - Math.round(26 * s * dpr);
-      
+
+      // Horizontal-only safe margin (vertical stays exactly as before)
+      const insetX = Math.round(SCREEN_CORNER_RADIUS_PX * UI_CORNER_INSET_FRAC * dpr);
+      const mX = m + insetX;
+
       // Physics ground (unchanged)
       const groundYPhys = h - world.groundPad;
 
@@ -1356,7 +1494,7 @@
         ? 'Ventra not supported in this browser'
         : (currentInput ? 'Ventra connected' : 'Ventra not connected — plug in and refresh');
 
-      const left = drawTextPill(m, topY, ventraText, { colour: currentInput ? cssVar('--text') : cssVar('--muted'), alpha: 0.28 });
+      const left = drawTextPill(mX, topY, ventraText, { colour: currentInput ? cssVar('--text') : cssVar('--muted'), alpha: 0.28 });
 
       const ccText = `CC2: ${String(cc2).padStart(3, '0')}`;
       // measure-first for right aligned (no redraw)
@@ -1366,7 +1504,7 @@
         const padY = Math.round(6 * s2 * dpr);
         const fontPx = Math.round((12 * s2) * dpr);
         const { w: pillW, h: pillH } = pillMetrics(ccText, fontPx, padX, padY);
-        const x = w - m - pillW;
+        const x = w - mX - pillW;
         drawPillAt(x, topY, pillW, pillH, 0.28, 0.40);
 
         ctx.save();
@@ -1392,7 +1530,7 @@
           const padY = Math.round(6 * s2 * dpr);
           const fontPx = Math.round((12 * s2) * dpr);
           const { w: pillW, h: pillH } = pillMetrics(t1, fontPx, padX, padY);
-          const x = w - m - pillW;
+          const x = w - mX - pillW;
           drawPillAt(x, hudY, pillW, pillH, 0.22, 0.30);
           ctx.save();
           ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
@@ -1412,7 +1550,7 @@
           const fontPx = Math.round((12 * s2) * dpr);
           const { w: pillW, h: pillH } = pillMetrics(t2, fontPx, padX, padY);
           const y = hudY + Math.round(28 * s * dpr);
-          const x = w - m - pillW;
+          const x = w - mX - pillW;
           drawPillAt(x, y, pillW, pillH, 0.22, 0.30);
           ctx.save();
           ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
@@ -1427,12 +1565,12 @@
 
       // Bottom controls: Back pill + Help circle + Speaker circle
       // Back pill
-      const back = drawTextPill(m, by, 'Back', { colour: cssVar('--muted'), alpha: 0.28 });
+      const back = drawTextPill(mX, by, 'Back', { colour: cssVar('--muted'), alpha: 0.28 });
       ui.backRect = back;
 
       // Help circle (right)
       const rBtn = Math.round(13 * s * dpr);
-      const helpCx = w - m - rBtn;
+      const helpCx = w - mX - rBtn;
       const helpCy = by + rBtn;
       drawCircleButton(helpCx, helpCy, rBtn, { alpha: 0.90, borderAlpha: 0.45 });
       ctx.save();
@@ -1551,17 +1689,20 @@
         ctx.textAlign = 'right';
         ctx.textBaseline = 'bottom';
         ctx.font = `${Math.round(11 * dpr)}px "JetBrains Mono", ui-monospace, monospace`;
-        ctx.fillText('Clearing…', Math.round(w - 10 * dpr), Math.round(h - 44 * dpr));
+        ctx.fillText('Clearing…', Math.round(w - mX), Math.round(h - 44 * dpr));
         ctx.restore();
       }
 
       if (world.helpOpen) drawHelpOverlay(w, h);
 
-      // Glass shading (curved-glass highlight + vignette), then CRT pattern on top
+      // Glass shading (curved-glass highlight + vignette), then CRT pattern
       drawGlassShading(w, h);
-      
-      // CRT overlay MUST be drawn last so it sits over everything (title, UI, game)
+
+      // CRT overlay MUST be drawn over everything (title, UI, game)
       drawCrtOverlayIntoScene(w, h);
+
+      // Film grain sits on top of the entire image
+      drawFilmGrain(w, h, nowS);
 
       if (SHOW_COLLISION_DEBUG) {
         const a = Math.max(8 * dpr, (drawW * COLL_A_FRAC));
@@ -1573,6 +1714,9 @@
 
         drawEllipseDebug(cx, cy, a, b, theta);
       }
+
+      // If we clipped, we must restore once at the end
+      if (SCREEN_CORNER_RADIUS_PX > 0) ctx.restore();
     }
 
     // ============================================================
@@ -1582,6 +1726,8 @@
 
     function step(ts) {
       const { w, h } = resizeCanvasToDisplaySize();
+
+      nowS = ts * 0.001;
 
       const dt = Math.min(0.033, Math.max(0.001, (ts - (lastTs || ts)) / 1000));
       lastTs = ts;
