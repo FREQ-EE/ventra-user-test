@@ -325,8 +325,14 @@
       return Math.max(0.2, REST_COUNT * REST_COUNT_STEP_S);
     }
 
-    const SPEED_RAMP_PER_S = 16;
+    const SPEED_RAMP_PER_S = 14;
     const SPEED_TAU_S = 0.60;
+    // If true, prevent world.speed from drifting upward during rest/return phases.
+    const FREEZE_SPEED_DURING_REST = true;
+
+    // After each rest cycle completes, reduce the ramp time slightly (seconds).
+    // This lowers targetSpeed after a pause without resetting difficulty.
+    const POST_REST_PLAYT_REWIND_S = 1.25; // try 0.5..2.5
 
     // ============================================================
     // MIDI
@@ -1102,6 +1108,8 @@
       playT: 0,
       baseSpeed: 180,
       speed: 180,
+      speedHold: 0,
+      pendingPlayTRewind: 0,
       groundPad: 22,
       topPad: 22,
       distAcc: 0,
@@ -1188,7 +1196,6 @@
 
       const gap = 150;
       const kind = (Math.random() < 0.55) ? 'pipe' : 'block';
-      const vx = world.speed * dpr;
 
       if (kind === 'pipe') {
         const pipeW = 56 * dpr;
@@ -1207,7 +1214,6 @@
           kind: 'pipe',
           x: w + 20 * dpr,
           w: pipeW,
-          vx,
           top: { y: ceilingY, w: pipeW, h: topH },
           bot: { y: botY,     w: pipeW, h: botH }
         });
@@ -1220,7 +1226,6 @@
           y: groundY - blockH,
           w: blockW,
           h: blockH,
-          vx
         });
       }
     }
@@ -2062,15 +2067,21 @@
         if (!inBreak) world.playT += dt;
 
         const targetSpeed = world.baseSpeed + SPEED_RAMP_PER_S * world.playT;
-        world.speed = expApproach(world.speed, targetSpeed, dt, SPEED_TAU_S);
+
+        if (FREEZE_SPEED_DURING_REST && inBreak) {
+          // Hold speed constant through the pause so it cannot “catch up” while resting.
+          world.speed = world.speedHold || world.speed;
+        } else {
+          world.speed = expApproach(world.speed, targetSpeed, dt, SPEED_TAU_S);
+        }
 
         if (!world.restPending && !inBreak && world.playT >= world.nextRestAt) {
           world.restPending = true;
         }
 
+        const scrollVx = world.speed * dpr;
         for (const ob of world.obstacles) {
-          const vx = (typeof ob.vx === 'number') ? ob.vx : (world.speed * dpr);
-          ob.x -= vx * dt;
+          ob.x -= scrollVx * dt;
         }
 
         while (world.obstacles.length && (world.obstacles[0].x + (world.obstacles[0].w || world.obstacles[0].top.w)) < -40 * dpr) {
@@ -2089,6 +2100,8 @@
           player.vy = 0;
           player.tilt = 0;
           tailVyFilt = 0;
+          world.speedHold = world.speed;
+          world.pendingPlayTRewind = POST_REST_PLAYT_REWIND_S;
         }
 
         if (world.resting) {
@@ -2161,6 +2174,15 @@
             player.tilt = 0;
             tailVyFilt = 0;
 
+            // Slightly reduce the ramp after a pause (optional difficulty smoothing).
+            if (world.pendingPlayTRewind > 0) {
+              world.playT = Math.max(0, world.playT - world.pendingPlayTRewind);
+              world.pendingPlayTRewind = 0;
+
+              // Ensure speed is not above the newly lowered target.
+              const newTarget = world.baseSpeed + SPEED_RAMP_PER_S * world.playT;
+              world.speed = Math.min(world.speed, newTarget);
+            }
             world.distAcc = 0;
           }
         }
