@@ -11,36 +11,17 @@
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800;900&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 
   <style>
-    :root { color-scheme: dark light; }
+    :root { color-scheme: dark; }
 
     :root{
-      /* Screen shaping */
-      --screen-radius: 30px;
-      --screen-curve: 0.0;            /* kept, but NOT used */
-      --screen-bloom: 0.25;
-      --screen-bloom-blur: 2px;
-      --screen-bloom-spread: 2px;
-
-      /* Glass curvature strength (highlight/vignette only) */
-      --glass-strength: 1.75;         /* 0.0 .. 2.0 */
-    }
-
-    :root{
-      --bg:#0F1011; --card:#13151C; --text:#EDF4FA; --muted:#9AA4B2; --border:#262C3C;
-      --accentA:#8B5CF6; --accentB:#EC4899; --warn:#FFB86B; --danger:#FF6B6B;
-
-      /* Game background gradient alphas (set from JS via GAME_BG_INTENSITY) */
-      --gA:0.18;
-      --gB:0.15;
-      --gC0:0.12;
-      --gC1:0.00;
-    }
-    @media (prefers-color-scheme: light){
-      :root{
-        --bg:#FFFFFF; --card:#FFFFFF; --text:#0B0D10; --muted:#556170; --border:#E5E7EB;
-        --accentA:#7C3AED; --accentB:#DB2777; --warn:#B86B00; --danger:#B42318;
-        --gA:0.18; --gB:0.15; --gC0:0.12; --gC1:0.00;
-      }
+      --bg:#000000;
+      --text:#EDF4FA;
+      --muted:#9AA4B2;
+      --accentA:#8B5CF6;
+      --accentB:#EC4899;
+      --warn:#FFB86B;
+      --danger:#FF6B6B;
+      --border:#262C3C;
     }
 
     html, body { height: 100%; }
@@ -50,307 +31,42 @@
       color:var(--text);
       font-family:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace;
       line-height:1.35;
+      display:grid;
+      place-items:center;
+      overflow:hidden;
     }
 
-    .wrap{ max-width:980px; margin:0 auto; padding:18px 18px 28px; display:grid; gap:14px; }
-    header{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; flex-wrap:wrap; }
-
-    h1{
-      margin:0;
-      font-family:"Orbitron", system-ui, sans-serif;
-      font-weight:900;
-      font-size:18px;
-      letter-spacing:0.02em;
-      background:linear-gradient(90deg, var(--accentA), var(--accentB));
-      -webkit-background-clip:text; background-clip:text; color:transparent;
-    }
-
-    .row{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-
-    a{ color:inherit; text-decoration:none; }
-    a:hover{ text-decoration:underline; }
-
-    .pill{
-      display:inline-flex; align-items:center; justify-content:center;
-      padding:6px 10px;
-      border:1px solid var(--border);
-      border-radius:999px;
-      background:rgba(0,0,0,0.10);
-      font-size:12px;
-      color:var(--muted);
-      font-variant-numeric:tabular-nums;
-      white-space:nowrap;
-      user-select:none;
-    }
-
-    #ccPill { min-width: 86px; justify-content: center; }
-
-    button{ font:inherit; color:inherit; }
-    .iconBtn{
-      border:1px solid var(--border);
-      border-radius:999px;
-      background:rgba(0,0,0,0.10);
-      padding:6px 10px;
-      line-height:1;
-      cursor:pointer;
-      display:inline-flex; align-items:center; gap:8px;
-      color:var(--muted);
-      transition: border-color 120ms ease, color 120ms ease;
-    }
-    .iconBtn:hover{ border-color:var(--accentA); color:var(--text); }
-    .iconBtn svg{ width:18px; height:18px; pointer-events:none; }
-    .iconOn, .iconOff{ display:none; }
-    .iconBtn[data-on="1"] .iconOn{ display:block; }
-    .iconBtn[data-on="0"] .iconOff{ display:block; }
-
-    /* Game shell (4:3) */
+    /* Single visible element: the canvas area. Outside stays pure black. */
     .gameShell{
       position:relative;
-      overflow:visible;
-      border-radius:var(--screen-radius);
-      border:1px solid var(--border);
-
-      width:100%;
+      width:min(96vw, 980px);
       aspect-ratio: 4 / 3;
-      max-height: 78vh;
-
-      background-color:#000;
-      background:
-        radial-gradient(900px 320px at 10% 0%, rgba(139,92,246,var(--gA)), transparent 70%),
-        radial-gradient(900px 320px at 90% 0%, rgba(236,72,153,var(--gB)), transparent 70%),
-        linear-gradient(180deg, rgba(0,0,0,var(--gC0)), rgba(0,0,0,var(--gC1)));
-
-      box-shadow:
-        0 0 var(--screen-bloom-blur) var(--screen-bloom-spread) rgba(139,92,246, calc(0.25 * var(--screen-bloom))),
-        0 0 calc(var(--screen-bloom-blur) * 0.9) var(--screen-bloom-spread) rgba(236,72,153, calc(0.20 * var(--screen-bloom))),
-        0 0 calc(var(--screen-bloom-blur) * 1.2) 0 rgba(255,255,255, calc(0.06 * var(--screen-bloom)));
+      max-height: 92vh;
+      background:#000;
     }
 
-    /* The glass "screen" MUST fill the shell */
-    .gameShell > .screen{
-      position:absolute;
-      inset:0;
-      overflow:hidden;
-      border-radius:inherit;
-    }
-
-    /* Glass curvature illusion (highlight/vignette only) */
-    .gameShell > .screen::before{
-      content:"";
-      position:absolute;
-      inset:0;
-      pointer-events:none;
-      border-radius:inherit;
-      z-index:2;
-
-      background:
-        radial-gradient(140% 105% at 50% 16%,
-          rgba(255,255,255, calc(0.13 * var(--glass-strength))),
-          transparent 48%),
-        radial-gradient(140% 140% at 50% 55%,
-          transparent 56%,
-          rgba(0,0,0, calc(0.42 * var(--glass-strength))) 100%),
-        radial-gradient(120% 90% at 20% 10%,
-          rgba(255,255,255, calc(0.06 * var(--glass-strength))),
-          transparent 55%),
-        radial-gradient(120% 90% at 80% 10%,
-          rgba(255,255,255, calc(0.05 * var(--glass-strength))),
-          transparent 55%);
-
-      mix-blend-mode: soft-light;
-      opacity: 1;
-    }
-
-    .gameShell > .screen::after{
-      content:"";
-      position:absolute;
-      inset:0;
-      pointer-events:none;
-      border-radius:inherit;
-      z-index:2;
-
-      background:
-        radial-gradient(110% 110% at 50% 50%,
-          transparent 60%,
-          rgba(0,0,0, calc(0.55 * var(--glass-strength))) 100%),
-        radial-gradient(90% 120% at 50% 110%,
-          rgba(0,0,0, calc(0.22 * var(--glass-strength))),
-          transparent 55%),
-        radial-gradient(120% 90% at -10% 50%,
-          rgba(0,0,0, calc(0.20 * var(--glass-strength))),
-          transparent 50%),
-        radial-gradient(120% 90% at 110% 50%,
-          rgba(0,0,0, calc(0.20 * var(--glass-strength))),
-          transparent 50%);
-
-      mix-blend-mode: multiply;
-      opacity: 0.95;
-    }
-
-    canvas{ display:block; width:100%; height:100%; position:relative; z-index:0; }
-
-    /* DOM CRT layer is kept but hidden (CRT is now drawn into the canvas so it gets barrel-distorted) */
-    #crtOverlay{ display:none; }
-
-    .hud{
-      position:absolute;
-      top:10px; left:10px; right:10px;
-      display:flex; justify-content:space-between; gap:10px;
-      pointer-events:none;
-      font-size:12px;
-      color:var(--muted);
-      z-index:3;
-    }
-
-    .hudItem{
-      padding:6px 10px;
-      border-radius:999px;
-      border:1px solid var(--border);
-      background:rgba(0,0,0,0.10);
-      white-space:nowrap;
-      font-variant-numeric:tabular-nums;
-    }
-
-    .overlay{
-      position:absolute;
-      inset:0;
-      display:grid; place-items:center;
-      pointer-events:none;
-      padding:18px;
-      text-align:center;
-      z-index:4;
-    }
-
-    .overlayBox{
-      max-width:620px; width:100%;
-      border-radius:16px;
-      border:1px solid var(--border);
-      background:rgba(0,0,0,0.16);
-      padding:14px;
-      box-shadow:0 10px 40px rgba(0,0,0,0.25);
-    }
-    .overlayTitle{
-      font-family:"Orbitron", system-ui, sans-serif;
-      font-weight:900;
-      margin:0 0 8px;
-      font-size:14px;
-      letter-spacing:0.02em;
-      color:var(--text);
-    }
-    .overlayText{ margin:0; font-size:12px; color:var(--muted); }
-    .kbd{
-      display:inline-block;
-      padding:2px 8px;
-      border-radius:8px;
-      border:1px solid var(--border);
-      background:rgba(0,0,0,0.10);
-      color:var(--text);
-      font-size:12px;
+    canvas{
+      display:block;
+      width:100%;
+      height:100%;
+      background:#000;
+      cursor:default;
+      user-select:none;
+      -webkit-user-select:none;
+      touch-action:manipulation;
     }
   </style>
 </head>
 
 <body>
-  <div class="wrap">
-    <header>
-      <div>
-        <h1>VENTRA · EXHALE//ASCEND</h1>
-      </div>
-
-      <div class="row" aria-label="Status">
-        <span class="pill" id="ventraPill">Ventra not connected — plug in and refresh</span>
-        <span class="pill" id="ccPill">CC2: 000</span>
-
-        <button class="iconBtn" id="audioToggle" type="button" data-on="0" aria-label="Toggle music" title="Toggle music">
-          <svg class="iconOn" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path fill="currentColor" d="M3 10v4h4l5 4V6L7 10H3zm13.5 2a3.5 3.5 0 0 0-1.5-2.9v5.8A3.5 3.5 0 0 0 16.5 12zm0-7a1 1 0 0 0-.7 1.7A8 8 0 0 1 18 12a8 8 0 0 1-2.2 5.3 1 1 0 1 0 1.4 1.4A10 10 0 0 0 20 12a10 10 0 0 0-2.8-6.7 1 1 0 0 0-.7-.3z"/>
-          </svg>
-          <svg class="iconOff" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-            <path fill="currentColor" d="M3 10v4h4l5 4V6L7 10H3zm13.1 2 2.8 2.8 1.4-1.4L17.5 10.6l2.8-2.8-1.4-1.4L16.1 9.2l-2.8-2.8-1.4 1.4 2.8 2.8-2.8 2.8 1.4 1.4L16.1 12z"/>
-          </svg>
-        </button>
-
-        <span class="pill"><a href="./index.html" title="Back to instructions & feedback">Back</a></span>
-
-        <button class="iconBtn" id="helpBtn" type="button"
-                aria-label="Help"
-                title="Browser & MIDI help">?</button>
-      </div>
-    </header>
-
-    <div class="gameShell" id="gameShell" aria-label="Ventra game">
-      <div class="screen">
-        <div class="hud">
-          <div class="hudItem" id="hudTime">Time: 0.0 s</div>
-          <div class="hudItem" id="hudSpeed">Speed: 0</div>
-        </div>
-
-        <canvas id="game"></canvas>
-        <div id="crtOverlay" aria-hidden="true"></div>
-
-        <div class="overlay" id="overlay">
-          <div class="overlayBox">
-            <p class="overlayTitle" id="overlayTitle">Ready</p>
-            <p class="overlayText" id="overlayText">
-              Start with <span class="kbd">three breath pulses</span>.
-            </p>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <dialog id="helpDialog" style="
-      border:1px solid var(--border);
-      border-radius:16px;
-      background:var(--card);
-      color:var(--text);
-      max-width:720px;
-      padding:18px;
-    ">
-      <h3 style="margin-top:0;font-family:Orbitron,sans-serif;font-size:14px;">
-        Browser & MIDI Setup
-      </h3>
-
-      <p style="font-size:12px;color:var(--muted);">
-        Ventra uses WebMIDI. Support depends on browser.
-      </p>
-
-      <ul style="font-size:12px;line-height:1.6;padding-left:18px;margin:10px 0 0;">
-        <li style="margin:10px 0;">
-          <strong>Chrome / Edge (recommended):</strong>
-          <span style="color:var(--muted); font-weight:400;">
-            WebMIDI works natively. Plug in Ventra and refresh if not detected.
-          </span>
-        </li>
-
-        <li style="margin:10px 0;">
-          <strong>Firefox:</strong>
-          <span style="color:var(--muted); font-weight:400;"><br>
-            1) Close Firefox. Plug in Ventra. Reopen Firefox. (Otherwise Firefox may show no MIDI ports.)<br>
-            2) When prompted, <strong>Allow MIDI device access</strong> (and SysEx if requested).<br>
-            3) For music: click the speaker button once (autoplay is often blocked).<br>
-            If MIDI still does not work: open <code>about:config</code> → set <code>dom.webmidi.enabled</code> to <code>true</code> → refresh.
-          </span>
-        </li>
-
-        <li style="margin:10px 0;">
-          <strong>Safari (macOS):</strong>
-          <span style="color:var(--muted); font-weight:400;">
-            Develop → Experimental Features → enable WebMIDI. Restart browser if required.
-          </span>
-        </li>
-      </ul>
-
-      <div style="text-align:right;margin-top:12px;">
-        <button id="closeHelp" class="iconBtn" type="button">Close</button>
-      </div>
-    </dialog>
-
-    <audio id="bgm" loop preload="auto">
-      <source src="./music.ogg" type="audio/ogg">
-      <source src="./music.mp3" type="audio/mpeg">
-    </audio>
+  <div class="gameShell" id="gameShell" aria-label="Ventra game">
+    <canvas id="game"></canvas>
   </div>
+
+  <audio id="bgm" loop preload="auto">
+    <source src="./music.ogg" type="audio/ogg">
+    <source src="./music.mp3" type="audio/mpeg">
+  </audio>
 
   <script>
     'use strict';
@@ -373,18 +89,37 @@
     const BARREL_K = 0.075;
     const BARREL_SLICES = 90;
 
+    // Approx inverse mapping for click hit-testing (good enough for UI).
+    function viewToScene(xv, yv, w, h) {
+      if (!BARREL_ENABLED || BARREL_K <= 0) return { x: xv, y: yv };
+
+      const K = BARREL_K;
+      const cx = w * 0.5;
+      const cy = h * 0.5;
+
+      // Invert second pass (x scaled by invS(y))
+      const yNorm = (yv - cy) / Math.max(1e-6, cy);
+      const Sy = 1 + K * (yNorm * yNorm);
+      const xs = cx + (xv - cx) * Sy;
+
+      // Invert first pass (y scaled by invS(x))
+      const xNorm = (xs - cx) / Math.max(1e-6, cx);
+      const Sx = 1 + K * (xNorm * xNorm);
+      const ys = cy + (yv - cy) * Sx;
+
+      return { x: xs, y: ys };
+    }
+
     // ============================================================
-    // CRT (now rendered into the off-screen scene, so it gets barrel distortion)
+    // CRT (rendered into the off-screen scene, so it gets barrel distortion)
     // ============================================================
-    const CRT_OPACITY = 0.15;
+    const CRT_OPACITY = 0.30;
     const CRT_REPEATS_X = 98;
     const CRT_BRICK_OFFSET_FRAC = 1/2;
 
-    // Canvas supports ctx.filter, but blend modes like "soft-light" vary by browser.
-    // We approximate: use 'overlay' if available, else 'source-over'.
-    const CRT_COMPOSITE = 'overlay';         // try: 'overlay', 'soft-light', 'multiply'
-    const CRT_CONTRAST = 0.66;
-    const CRT_BRIGHTNESS = 0.50;
+    const CRT_COMPOSITE = 'soft-light';   // browser-dependent support
+    const CRT_CONTRAST = 0.8;
+    const CRT_BRIGHTNESS = 0.40;
 
     const crtImg = new Image();
     let crtImgReady = false;
@@ -396,51 +131,9 @@
     let crtPatternTilePx = 0;
     let crtPatternShiftPx = -1;
 
-    function ensureCrtPattern(w, h, dpr) {
-      if (!crtImgReady) return null;
-
-      const tileCssPx = Math.max(2, Math.round((w / dpr) / CRT_REPEATS_X));
-      const shiftPx = Math.round(tileCssPx * CRT_BRICK_OFFSET_FRAC) % tileCssPx;
-
-      if (crtPattern && tileCssPx === crtPatternTilePx && shiftPx === crtPatternShiftPx) return crtPattern;
-
-      const tile = document.createElement('canvas');
-      tile.width = tileCssPx;
-      tile.height = tileCssPx;
-      const tctx = tile.getContext('2d');
-      tctx.clearRect(0, 0, tileCssPx, tileCssPx);
-      tctx.drawImage(crtImg, 0, 0, tileCssPx, tileCssPx);
-
-      const brick = document.createElement('canvas');
-      brick.width = tileCssPx;
-      brick.height = tileCssPx * 2;
-      const bctx = brick.getContext('2d');
-      bctx.clearRect(0, 0, brick.width, brick.height);
-      bctx.drawImage(tile, 0, 0);
-      bctx.drawImage(tile, -shiftPx, tileCssPx);
-      bctx.drawImage(tile, tileCssPx - shiftPx, tileCssPx);
-
-      // Convert to CanvasPattern for fast fill.
-      const pat = ctx.createPattern(brick, 'repeat');
-      crtPattern = pat;
-      crtPatternTilePx = tileCssPx;
-      crtPatternShiftPx = shiftPx;
-      return pat;
-    }
-
-    const GAME_BG_INTENSITY = 0.6;
-    const GAME_BG_BASE = { gA: 0.18, gB: 0.15, gC0: 0.12, gC1: 0.00 };
-
-    function applyGameBgIntensity() {
-      const r = document.documentElement;
-      const k = Math.max(0, GAME_BG_INTENSITY);
-      r.style.setProperty('--gA',  String(GAME_BG_BASE.gA  * k));
-      r.style.setProperty('--gB',  String(GAME_BG_BASE.gB  * k));
-      r.style.setProperty('--gC0', String(GAME_BG_BASE.gC0 * k));
-      r.style.setProperty('--gC1', String(GAME_BG_BASE.gC1 * k));
-    }
-    applyGameBgIntensity();
-
+    // ============================================================
+    // Assets
+    // ============================================================
     const monkeyImg = new Image();
     let monkeyReady = false;
     monkeyImg.onload = () => { monkeyReady = true; };
@@ -489,141 +182,9 @@
     let monkeyCacheW = 0;
     let monkeyCacheH = 0;
 
-    function rebuildMonkeyCache(drawW, drawH) {
-      const CACHE_SCALE = 2;
-      const cw = Math.max(1, Math.round(drawW * CACHE_SCALE));
-      const ch = Math.max(1, Math.round(drawH * CACHE_SCALE));
-
-      monkeyCacheW = cw;
-      monkeyCacheH = ch;
-
-      monkeyMaskCanvas.width = cw;
-      monkeyMaskCanvas.height = ch;
-      monkeyLayerCanvas.width = cw;
-      monkeyLayerCanvas.height = ch;
-
-      const mctx = monkeyMaskCanvas.getContext('2d');
-      mctx.setTransform(1, 0, 0, 1, 0, 0);
-      mctx.clearRect(0, 0, cw, ch);
-      mctx.drawImage(monkeyImg, 0, 0, cw, ch);
-    }
-
-    function ensureMonkeyCache(drawW, drawH) {
-      if (!monkeyReady) return false;
-      if (drawW !== monkeyCacheW || drawH !== monkeyCacheH) rebuildMonkeyCache(drawW, drawH);
-      return true;
-    }
-
-    function makeTintedMonkeyLayer(colour, strokePxCss) {
-      const lctx = monkeyLayerCanvas.getContext('2d');
-      lctx.clearRect(0, 0, monkeyCacheW, monkeyCacheH);
-
-      const strokePx = Math.max(0, strokePxCss * dpr);
-      const half = Math.floor(strokePx / 2);
-
-      lctx.globalCompositeOperation = 'source-over';
-      for (let dx = -half; dx <= half; dx++) {
-        for (let dy = -half; dy <= half; dy++) {
-          lctx.drawImage(monkeyMaskCanvas, dx, dy);
-        }
-      }
-
-      lctx.globalCompositeOperation = 'destination-in';
-      lctx.drawImage(monkeyMaskCanvas, 0, 0);
-
-      lctx.globalCompositeOperation = 'source-atop';
-      lctx.fillStyle = colour;
-      lctx.fillRect(0, 0, monkeyCacheW, monkeyCacheH);
-
-      lctx.globalCompositeOperation = 'source-over';
-    }
-
-    function drawMonkeyNeon(x, y, tilt, drawW, drawH, extraScale = 1.0) {
-      if (!ensureMonkeyCache(drawW, drawH)) return;
-
-      const speedFactor = clamp(world.speed / world.baseSpeed, 1, 3.2);
-      const tCap = clamp(world.survive / TAIL_X_CAP_S, 0, 1);
-
-      const xNorm = clamp((speedFactor - 1) / (3.2 - 1), 0, 1) * tCap;
-      const vNorm = clamp(Math.abs(tailVyFilt) / Math.max(1e-6, TAIL_VY_FOR_MAX), 0, 1);
-      const ySign = (tailVyFilt >= 0) ? -1 : 1;
-
-      const M_BLUE = 0.45;
-      const M_GOLD = 0.70;
-      const M_RED  = 1.00;
-
-      const baseGold = { x: MONKEY_GOLD_OFF_CSS.x, y: MONKEY_GOLD_OFF_CSS.y };
-      const baseRed  = { x: MONKEY_RED_OFF_CSS.x,  y: MONKEY_RED_OFF_CSS.y  };
-      const baseBlue = { x: MONKEY_BLUE_OFF_CSS.x, y: MONKEY_BLUE_OFF_CSS.y };
-      const baseAqua = { x: MONKEY_AQUA_OFF_CSS.x, y: MONKEY_AQUA_OFF_CSS.y };
-
-      const xLagBlue = -TAIL_X_MAX_CSS * xNorm * M_BLUE;
-      const xLagGold = -TAIL_X_MAX_CSS * xNorm * M_GOLD;
-      const xLagRed  = -TAIL_X_MAX_CSS * xNorm * M_RED;
-
-      const yLagBlue = (TAIL_Y_MAX_CSS * vNorm * M_BLUE) * ySign;
-      const yLagGold = (TAIL_Y_MAX_CSS * vNorm * M_GOLD) * ySign;
-      const yLagRed  = (TAIL_Y_MAX_CSS * vNorm * M_RED ) * ySign;
-
-      const goldOff = { x: (baseGold.x + xLagGold) * dpr, y: (baseGold.y + yLagGold) * dpr };
-      const redOff  = { x: (baseRed.x  + xLagRed ) * dpr, y: (baseRed.y  + yLagRed ) * dpr };
-      const blueOff = { x: (baseBlue.x + xLagBlue) * dpr, y: (baseBlue.y + yLagBlue) * dpr };
-      const aquaOff = { x: baseAqua.x * dpr, y: baseAqua.y * dpr };
-
-      const sBlue = 1 + (TAIL_SCALE_MAX * xNorm + TAIL_SCALE_MAX * 0.75 * vNorm) * M_BLUE;
-      const sGold = 1 + (TAIL_SCALE_MAX * xNorm + TAIL_SCALE_MAX * 0.75 * vNorm) * M_GOLD;
-      const sRed  = 1 + (TAIL_SCALE_MAX * xNorm + TAIL_SCALE_MAX * 0.75 * vNorm) * M_RED;
-      const sBase = 1.0;
-      const sAura = 1.0;
-
-      const layers = [
-        { colour: MONKEY_AQUA_COLOUR, blurCss: MONKEY_AURA_BLUR_PX, dx: aquaOff.x, dy: aquaOff.y, stroke: MONKEY_AQUA_STROKE_PX, mode: 'hard-light', scale: sAura },
-        { colour: MONKEY_GOLD_COLOUR, blurCss: MONKEY_GLOW_BLUR_PX, dx: goldOff.x, dy: goldOff.y, stroke: MONKEY_GOLD_STROKE_PX, mode: 'normal',     scale: sGold },
-        { colour: MONKEY_RED_COLOUR,  blurCss: MONKEY_GLOW_BLUR_PX, dx: redOff.x,  dy: redOff.y,  stroke: MONKEY_RED_STROKE_PX,  mode: 'normal',     scale: sRed  },
-        { colour: MONKEY_BLUE_COLOUR, blurCss: MONKEY_GLOW_BLUR_PX, dx: blueOff.x, dy: blueOff.y, stroke: MONKEY_BLUE_STROKE_PX, mode: 'normal',     scale: sBlue },
-        { colour: MONKEY_BASE_COLOUR, blurCss: 0,                   dx: 0,         dy: 0,          stroke: MONKEY_BASE_STROKE_PX, mode: 'normal',     scale: sBase },
-      ];
-
-      for (const L of layers) {
-        makeTintedMonkeyLayer(L.colour, L.stroke);
-
-        ctx.save();
-        ctx.translate(x + L.dx, y + L.dy);
-        ctx.rotate(tilt);
-
-        const sLocal = (L.scale && L.scale !== 1) ? (L.scale * extraScale) : extraScale;
-        if (sLocal !== 1) ctx.scale(sLocal, sLocal);
-
-        ctx.filter = (L.blurCss > 0)
-          ? `blur(${(L.blurCss * dpr).toFixed(4)}px)`
-          : 'none';
-
-        ctx.globalCompositeOperation = (L.mode === 'hard-light') ? 'hard-light' : 'source-over';
-
-        if (L.colour === MONKEY_BASE_COLOUR) ctx.globalAlpha = MONKEY_BASE_ALPHA;
-        else if (L.colour === MONKEY_AQUA_COLOUR) ctx.globalAlpha = MONKEY_AURA_ALPHA;
-        else ctx.globalAlpha = MONKEY_GLOW_ALPHA;
-
-        const passes = (L.colour === MONKEY_BASE_COLOUR) ? MONKEY_BASE_PASSES : 1;
-        for (let i = 0; i < passes; i++) {
-          ctx.drawImage(monkeyLayerCanvas, -drawW / 2, -drawH / 2, drawW, drawH);
-        }
-
-        ctx.restore();
-      }
-
-      ctx.globalAlpha = 1;
-      ctx.filter = 'none';
-      ctx.globalCompositeOperation = 'source-over';
-    }
-
-    const COLL_ROT_DEG = -24;
-    const COLL_ROT = (COLL_ROT_DEG * Math.PI) / 180;
-    const COLL_A_FRAC = 0.40;
-    const COLL_B_FRAC = 0.15;
-    const COLL_CX_OFF_FRAC = 0.05;
-    const COLL_CY_OFF_FRAC = 0.03;
-
+    // ============================================================
+    // Rest / pause settings (unchanged)
+    // ============================================================
     const REST_EVERY_S = 25;
     const REST_COUNT = 3;
     const REST_COUNT_STEP_S = 1.75;
@@ -651,16 +212,14 @@
     const SPEED_RAMP_PER_S = 16;
     const SPEED_TAU_S = 0.60;
 
+    // ============================================================
+    // MIDI
+    // ============================================================
     const targetChannel1Based = 1;
     const targetCC = 2;
 
-    const ventraPill = document.getElementById('ventraPill');
-    const ccPill = document.getElementById('ccPill');
-
     let midiAccess = null;
     let currentInput = null;
-
-    function setVentraText(text) { ventraPill.textContent = text; }
 
     function detachCurrentInput() {
       if (currentInput) currentInput.onmidimessage = null;
@@ -682,45 +241,46 @@
     function attachVentraIfPresent() {
       detachCurrentInput();
       const input = findVentraInput();
-      if (!input) {
-        setVentraText('Ventra not connected — plug in and refresh');
-        return false;
-      }
+      if (!input) return false;
       currentInput = input;
       currentInput.onmidimessage = onMIDIMessage;
-      setVentraText('Ventra connected');
       return true;
     }
 
     async function initMIDI() {
-      if (!('requestMIDIAccess' in navigator)) {
-        setVentraText('Ventra not supported in this browser');
-        return;
-      }
-
+      if (!('requestMIDIAccess' in navigator)) return;
       try {
         midiAccess = await navigator.requestMIDIAccess({ sysex: false });
         attachVentraIfPresent();
         midiAccess.onstatechange = () => attachVentraIfPresent();
       } catch (err) {
         console.error(err);
-        setVentraText('Ventra not enabled — refresh and allow MIDI');
       }
     }
 
     initMIDI();
 
-    const audioToggle = document.getElementById('audioToggle');
+    // ============================================================
+    // Audio (same behaviour as before: stored pref; autoplay may block until interaction)
+    // ============================================================
     const bgm = document.getElementById('bgm');
     const AUDIO_KEY = 'ventra_game_music';
+    let audioOn = true;
 
-    function musicIsArmed() { return audioToggle.dataset.on === '1'; }
+    function loadAudioPref() {
+      const saved = localStorage.getItem(AUDIO_KEY);
+      audioOn = (saved === null) ? true : (saved === '1');
+      if (saved === null) localStorage.setItem(AUDIO_KEY, '1');
+    }
+    loadAudioPref();
+
+    function musicIsArmed() { return audioOn; }
 
     async function startMusicIfArmed() {
       if (!bgm) return;
       if (!musicIsArmed()) return;
       try { await bgm.play(); }
-      catch (e) { console.warn('Audio play failed:', e); }
+      catch (e) { /* autoplay blocks are expected */ }
     }
 
     function stopMusic() {
@@ -729,32 +289,18 @@
       bgm.currentTime = 0;
     }
 
-    function setAudioUI(on) { audioToggle.dataset.on = on ? '1' : '0'; }
-
-    async function setAudio(on) {
-      localStorage.setItem(AUDIO_KEY, on ? '1' : '0');
-      setAudioUI(on);
-
-      if (!bgm) return;
-
-      if (on) {
-        if (world && world.started) startMusicIfArmed();
-      } else {
-        stopMusic();
-      }
+    function setAudio(on) {
+      audioOn = !!on;
+      localStorage.setItem(AUDIO_KEY, audioOn ? '1' : '0');
+      if (!audioOn) stopMusic();
+      else if (world && world.started) startMusicIfArmed();
     }
 
-    const saved = localStorage.getItem(AUDIO_KEY);
-    setAudioUI(saved === null ? true : saved === '1');
-    if (saved === null) localStorage.setItem(AUDIO_KEY, '1');
-
-    audioToggle.addEventListener('click', () => {
-      const next = audioToggle.dataset.on !== '1';
-      setAudio(next);
-    });
-
+    // ============================================================
+    // Canvas setup
+    // ============================================================
     const canvas = document.getElementById('game');
-    const viewCtx = canvas.getContext('2d');
+    const viewCtx = canvas.getContext('2d', { alpha: false });
 
     const renderCanvas = document.createElement('canvas');
     const ctx = renderCanvas.getContext('2d');
@@ -762,69 +308,12 @@
     const distortCanvas = document.createElement('canvas');
     const dctx = distortCanvas.getContext('2d');
 
-    const overlay = document.getElementById('overlay');
-    const overlayTitle = document.getElementById('overlayTitle');
-    const overlayText = document.getElementById('overlayText');
-    const hudTime = document.getElementById('hudTime');
-    const hudSpeed = document.getElementById('hudSpeed');
-
-    let cc2 = 0;
-
-    function setCC2(v) {
-      cc2 = clamp(v | 0, 0, 127);
-      ccPill.textContent = `CC2: ${String(cc2).padStart(3, '0')}`;
-    }
-
-    const PULSE_THRESHOLD = 32;
-    const PULSE_WINDOW_S = 1.6;
-    let prevCC2 = 0;
-    let pulseCount = 0;
-    let pulseWindowT = 0;
-
-    function resetPulses() {
-      pulseCount = 0;
-      pulseWindowT = 0;
-      prevCC2 = cc2;
-    }
-
-    function registerPulse(dt) {
-      if (!currentInput) {
-        pulseCount = 0;
-        pulseWindowT = 0;
-        prevCC2 = cc2;
-        return;
-      }
-
-      const rising = (prevCC2 < PULSE_THRESHOLD) && (cc2 >= PULSE_THRESHOLD);
-      prevCC2 = cc2;
-
-      if (pulseWindowT > 0) {
-        pulseWindowT = Math.max(0, pulseWindowT - dt);
-        if (pulseWindowT === 0) pulseCount = 0;
-      }
-
-      if (rising) {
-        if (pulseWindowT === 0) {
-          pulseWindowT = PULSE_WINDOW_S;
-          pulseCount = 1;
-        } else {
-          pulseCount += 1;
-        }
-
-        if (pulseCount >= 3) {
-          pulseCount = 0;
-          pulseWindowT = 0;
-
-          if (!world.started && !world.over) startGame();
-          else if (world.over) startGame();
-        }
-      }
-    }
-
     let dpr = 1;
+
     function resizeCanvasToDisplaySize() {
       const rect = canvas.getBoundingClientRect();
       dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+
       const w = Math.max(320, Math.round(rect.width * dpr));
       const h = Math.max(240, Math.round(rect.height * dpr));
 
@@ -844,6 +333,9 @@
       return { w, h };
     }
 
+    // ============================================================
+    // Barrel presentation (unchanged)
+    // ============================================================
     function presentWithBarrel(w, h) {
       if (!BARREL_ENABLED || BARREL_K <= 0) {
         viewCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -913,160 +405,193 @@
       }
     }
 
-    const player = { x: 0, y: 0, vy: 0, tilt: 0 };
+    // ============================================================
+    // CRT pattern builder
+    // ============================================================
+    function ensureCrtPattern(w, h, dprLocal) {
+      if (!crtImgReady) return null;
 
-    const world = {
-      started: false,
-      over: false,
-      survive: 0,
-      playT: 0,
-      baseSpeed: 180,
-      speed: 180,
-      groundPad: 22,
-      topPad: 22,
-      distAcc: 0,
-      nextSpawnDist: 760,
-      obstacles: [],
-      nextRestAt: REST_EVERY_S,
-      restPending: false,
-      resting: false,
-      returning: false,
-      restT: 0,
-      returnT: 0,
-      restScale: 1,
-      restUiAlpha: 0
-    };
+      const tileCssPx = Math.max(2, Math.round((w / dprLocal) / CRT_REPEATS_X));
+      const shiftPx = Math.round(tileCssPx * CRT_BRICK_OFFSET_FRAC) % tileCssPx;
 
-    const G = 2200;
-    const K_BASE = 30;
-    const K_BOOST = 1.2;
-    const DAMP_BASE = 22;
-    const VTERM = 2400;
+      if (crtPattern && tileCssPx === crtPatternTilePx && shiftPx === crtPatternShiftPx) return crtPattern;
 
-    const G_FALL_SCALE_MIN = 0.02;
-    const G_FALL_CC_MAX = 100;
+      const tile = document.createElement('canvas');
+      tile.width = tileCssPx;
+      tile.height = tileCssPx;
+      const tctx = tile.getContext('2d');
+      tctx.clearRect(0, 0, tileCssPx, tileCssPx);
+      tctx.drawImage(crtImg, 0, 0, tileCssPx, tileCssPx);
 
-    function updateHUD() {
-      hudTime.textContent = `Time: ${world.survive.toFixed(1)} s`;
-      hudSpeed.textContent = `Speed: ${world.speed.toFixed(0)}`;
+      const brick = document.createElement('canvas');
+      brick.width = tileCssPx;
+      brick.height = tileCssPx * 2;
+      const bctx = brick.getContext('2d');
+      bctx.clearRect(0, 0, brick.width, brick.height);
+      bctx.drawImage(tile, 0, 0);
+      bctx.drawImage(tile, -shiftPx, tileCssPx);
+      bctx.drawImage(tile, tileCssPx - shiftPx, tileCssPx);
+
+      const pat = ctx.createPattern(brick, 'repeat');
+      crtPattern = pat;
+      crtPatternTilePx = tileCssPx;
+      crtPatternShiftPx = shiftPx;
+      return pat;
     }
 
-    function resetGame() {
-      const { w, h } = resizeCanvasToDisplaySize();
+    function drawCrtOverlayIntoScene(w, h) {
+      const pat = ensureCrtPattern(w, h, dpr);
+      if (!pat) return;
 
-      world.started = false;
-      world.over = false;
+      ctx.save();
 
-      world.survive = 0;
-      world.playT = 0;
+      // Pattern blending + mild filtering
+      ctx.filter = `contrast(${CRT_CONTRAST}) brightness(${CRT_BRIGHTNESS})`;
+      ctx.globalCompositeOperation = CRT_COMPOSITE;
+      ctx.globalAlpha = CRT_OPACITY;
+      ctx.fillStyle = pat;
 
-      world.speed = world.baseSpeed;
+      // Align pattern to pixel grid (reduce shimmer)
+      ctx.translate(0.5 * dpr, 0.5 * dpr);
+      ctx.fillRect(-0.5 * dpr, -0.5 * dpr, w + dpr, h + dpr);
 
-      world.distAcc = 0;
-      world.obstacles = [];
-      world.nextSpawnDist = 620;
+      ctx.restore();
 
-      world.nextRestAt = REST_EVERY_S;
-      world.restPending = false;
-      world.resting = false;
-      world.returning = false;
-      world.restT = 0;
-      world.returnT = 0;
-      world.restScale = 1;
-      world.restUiAlpha = 0;
-
-      player.x = Math.round(w * 0.22);
-      player.y = Math.round(h * 0.50);
-      player.vy = 0;
-      player.tilt = 0;
-
-      tailVyFilt = 0;
-
-      resetPulses();
-
-      overlay.style.display = 'grid';
-      overlayTitle.textContent = 'Ready';
-      overlayText.innerHTML = 'Start with <span class="kbd">three breath pulses</span>';
-      updateHUD();
+      ctx.filter = 'none';
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = 'source-over';
     }
 
-    function startGame() {
-      if (!currentInput) {
-        overlay.style.display = 'grid';
-        overlayTitle.textContent = 'Ventra required';
-        overlayText.innerHTML = 'Plug in Ventra, refresh, then start with <span class="kbd">three breath pulses</span>.';
-        return;
+    // ============================================================
+    // Monkey neon cache
+    // ============================================================
+    function rebuildMonkeyCache(drawW, drawH) {
+      const CACHE_SCALE = 2;
+      const cw = Math.max(1, Math.round(drawW * CACHE_SCALE));
+      const ch = Math.max(1, Math.round(drawH * CACHE_SCALE));
+
+      monkeyCacheW = cw;
+      monkeyCacheH = ch;
+
+      monkeyMaskCanvas.width = cw;
+      monkeyMaskCanvas.height = ch;
+      monkeyLayerCanvas.width = cw;
+      monkeyLayerCanvas.height = ch;
+
+      const mctx = monkeyMaskCanvas.getContext('2d');
+      mctx.setTransform(1, 0, 0, 1, 0, 0);
+      mctx.clearRect(0, 0, cw, ch);
+      mctx.drawImage(monkeyImg, 0, 0, cw, ch);
+    }
+
+    function ensureMonkeyCache(drawW, drawH) {
+      if (!monkeyReady) return false;
+      if (drawW !== monkeyCacheW || drawH !== monkeyCacheH) rebuildMonkeyCache(drawW, drawH);
+      return true;
+    }
+
+    function makeTintedMonkeyLayer(colour, strokePxCss) {
+      const lctx = monkeyLayerCanvas.getContext('2d');
+      lctx.clearRect(0, 0, monkeyCacheW, monkeyCacheH);
+
+      const strokePx = Math.max(0, strokePxCss * dpr);
+      const half = Math.floor(strokePx / 2);
+
+      lctx.globalCompositeOperation = 'source-over';
+      for (let dx = -half; dx <= half; dx++) {
+        for (let dy = -half; dy <= half; dy++) {
+          lctx.drawImage(monkeyMaskCanvas, dx, dy);
+        }
       }
-      if (world.over) resetGame();
-      world.started = true;
-      world.over = false;
-      overlay.style.display = 'none';
-      resetPulses();
-      startMusicIfArmed();
+
+      lctx.globalCompositeOperation = 'destination-in';
+      lctx.drawImage(monkeyMaskCanvas, 0, 0);
+
+      lctx.globalCompositeOperation = 'source-atop';
+      lctx.fillStyle = colour;
+      lctx.fillRect(0, 0, monkeyCacheW, monkeyCacheH);
+
+      lctx.globalCompositeOperation = 'source-over';
     }
 
-    function gameOver() {
-      world.over = true;
-      world.started = false;
-      overlay.style.display = 'grid';
-      overlayTitle.textContent = 'Game over';
-      overlayText.innerHTML =
-        `Survived: <span class="kbd">${world.survive.toFixed(1)} s</span>. ` +
-        `Restart with <span class="kbd">three breath pulses</span>.`;
-      resetPulses();
-      stopMusic();
+    function drawMonkeyNeon(x, y, tilt, drawW, drawH, extraScale = 1.0) {
+      if (!ensureMonkeyCache(drawW, drawH)) return;
 
-      world.restPending = false;
-      world.resting = false;
-      world.returning = false;
-      world.restT = 0;
-      world.returnT = 0;
-      world.restScale = 1;
-      world.restUiAlpha = 0;
-    }
+      const speedFactor = clamp(world.speed / world.baseSpeed, 1, 3.2);
+      const tCap = clamp(world.survive / TAIL_X_CAP_S, 0, 1);
 
-    function spawnObstacle(w, h) {
-      const groundY = h - world.groundPad;
-      const ceilingY = world.topPad;
+      const xNorm = clamp((speedFactor - 1) / (3.2 - 1), 0, 1) * tCap;
+      const vNorm = clamp(Math.abs(tailVyFilt) / Math.max(1e-6, TAIL_VY_FOR_MAX), 0, 1);
+      const ySign = (tailVyFilt >= 0) ? -1 : 1;
 
-      const gap = 150;
-      const kind = (Math.random() < 0.55) ? 'pipe' : 'block';
-      const vx = world.speed * dpr;
+      const M_BLUE = 0.45;
+      const M_GOLD = 0.70;
+      const M_RED  = 1.00;
 
-      if (kind === 'pipe') {
-        const pipeW = 56 * dpr;
-        const gapCentreMin = ceilingY + 90 * dpr;
-        const gapCentreMax = groundY - 90 * dpr;
-        const gapCentre = clamp(
-          Math.round(gapCentreMin + Math.random() * (gapCentreMax - gapCentreMin)),
-          gapCentreMin, gapCentreMax
-        );
+      const xLagBlue = -TAIL_X_MAX_CSS * xNorm * M_BLUE;
+      const xLagGold = -TAIL_X_MAX_CSS * xNorm * M_GOLD;
+      const xLagRed  = -TAIL_X_MAX_CSS * xNorm * M_RED;
 
-        const topH = Math.max(20 * dpr, Math.round((gapCentre - (gap * dpr) / 2) - ceilingY));
-        const botY = Math.round(gapCentre + (gap * dpr) / 2);
-        const botH = Math.max(20 * dpr, Math.round(groundY - botY));
+      const yLagBlue = (TAIL_Y_MAX_CSS * vNorm * M_BLUE) * ySign;
+      const yLagGold = (TAIL_Y_MAX_CSS * vNorm * M_GOLD) * ySign;
+      const yLagRed  = (TAIL_Y_MAX_CSS * vNorm * M_RED ) * ySign;
 
-        world.obstacles.push({
-          kind: 'pipe',
-          x: w + 20 * dpr,
-          w: pipeW,
-          vx,
-          top: { y: ceilingY, w: pipeW, h: topH },
-          bot: { y: botY,     w: pipeW, h: botH }
-        });
-      } else {
-        const blockW = Math.round((46 + Math.random() * 46) * dpr);
-        const blockH = Math.round((50 + Math.random() * 140) * dpr);
-        world.obstacles.push({
-          kind: 'block',
-          x: w + 20 * dpr,
-          y: groundY - blockH,
-          w: blockW,
-          h: blockH,
-          vx
-        });
+      const goldOff = { x: (MONKEY_GOLD_OFF_CSS.x + xLagGold) * dpr, y: (MONKEY_GOLD_OFF_CSS.y + yLagGold) * dpr };
+      const redOff  = { x: (MONKEY_RED_OFF_CSS.x  + xLagRed ) * dpr, y: (MONKEY_RED_OFF_CSS.y  + yLagRed ) * dpr };
+      const blueOff = { x: (MONKEY_BLUE_OFF_CSS.x + xLagBlue) * dpr, y: (MONKEY_BLUE_OFF_CSS.y + yLagBlue) * dpr };
+      const aquaOff = { x: MONKEY_AQUA_OFF_CSS.x * dpr, y: MONKEY_AQUA_OFF_CSS.y * dpr };
+
+      const sBlue = 1 + (TAIL_SCALE_MAX * xNorm + TAIL_SCALE_MAX * 0.75 * vNorm) * M_BLUE;
+      const sGold = 1 + (TAIL_SCALE_MAX * xNorm + TAIL_SCALE_MAX * 0.75 * vNorm) * M_GOLD;
+      const sRed  = 1 + (TAIL_SCALE_MAX * xNorm + TAIL_SCALE_MAX * 0.75 * vNorm) * M_RED;
+
+      const layers = [
+        { colour: MONKEY_AQUA_COLOUR, blurCss: MONKEY_AURA_BLUR_PX, dx: aquaOff.x, dy: aquaOff.y, stroke: MONKEY_AQUA_STROKE_PX, mode: 'hard-light', scale: 1.0 },
+        { colour: MONKEY_GOLD_COLOUR, blurCss: MONKEY_GLOW_BLUR_PX, dx: goldOff.x, dy: goldOff.y, stroke: MONKEY_GOLD_STROKE_PX, mode: 'normal',     scale: sGold },
+        { colour: MONKEY_RED_COLOUR,  blurCss: MONKEY_GLOW_BLUR_PX, dx: redOff.x,  dy: redOff.y,  stroke: MONKEY_RED_STROKE_PX,  mode: 'normal',     scale: sRed  },
+        { colour: MONKEY_BLUE_COLOUR, blurCss: MONKEY_GLOW_BLUR_PX, dx: blueOff.x, dy: blueOff.y, stroke: MONKEY_BLUE_STROKE_PX, mode: 'normal',     scale: sBlue },
+        { colour: MONKEY_BASE_COLOUR, blurCss: 0,                   dx: 0,         dy: 0,          stroke: MONKEY_BASE_STROKE_PX, mode: 'normal',     scale: 1.0 },
+      ];
+
+      for (const L of layers) {
+        makeTintedMonkeyLayer(L.colour, L.stroke);
+
+        ctx.save();
+        ctx.translate(x + L.dx, y + L.dy);
+        ctx.rotate(tilt);
+
+        const sLocal = (L.scale && L.scale !== 1) ? (L.scale * extraScale) : extraScale;
+        if (sLocal !== 1) ctx.scale(sLocal, sLocal);
+
+        ctx.filter = (L.blurCss > 0) ? `blur(${(L.blurCss * dpr).toFixed(4)}px)` : 'none';
+        ctx.globalCompositeOperation = (L.mode === 'hard-light') ? 'hard-light' : 'source-over';
+
+        if (L.colour === MONKEY_BASE_COLOUR) ctx.globalAlpha = MONKEY_BASE_ALPHA;
+        else if (L.colour === MONKEY_AQUA_COLOUR) ctx.globalAlpha = MONKEY_AURA_ALPHA;
+        else ctx.globalAlpha = MONKEY_GLOW_ALPHA;
+
+        const passes = (L.colour === MONKEY_BASE_COLOUR) ? MONKEY_BASE_PASSES : 1;
+        for (let i = 0; i < passes; i++) {
+          ctx.drawImage(monkeyLayerCanvas, -drawW / 2, -drawH / 2, drawW, drawH);
+        }
+
+        ctx.restore();
       }
+
+      ctx.globalAlpha = 1;
+      ctx.filter = 'none';
+      ctx.globalCompositeOperation = 'source-over';
     }
+
+    // ============================================================
+    // Collision
+    // ============================================================
+    const COLL_ROT_DEG = -24;
+    const COLL_ROT = (COLL_ROT_DEG * Math.PI) / 180;
+    const COLL_A_FRAC = 0.40;
+    const COLL_B_FRAC = 0.15;
+    const COLL_CX_OFF_FRAC = 0.05;
+    const COLL_CY_OFF_FRAC = 0.03;
 
     function ellipseRectHit(cx, cy, a, b, theta, rx, ry, rw, rh) {
       const cosT = Math.cos(-theta);
@@ -1156,37 +681,557 @@
       ctx.restore();
     }
 
-    function drawCrtOverlayIntoScene(w, h) {
-      const pat = ensureCrtPattern(w, h, dpr);
-      if (!pat) return;
+    // ============================================================
+    // Game state (physics/mechanics unchanged)
+    // ============================================================
+    const player = { x: 0, y: 0, vy: 0, tilt: 0 };
 
-      ctx.save();
+    const world = {
+      started: false,
+      over: false,
+      hasStartedOnce: false,
 
-      // Approximate CSS filter: contrast() brightness()
-      ctx.filter = `contrast(${CRT_CONTRAST}) brightness(${CRT_BRIGHTNESS})`;
+      survive: 0,
+      playT: 0,
+      baseSpeed: 180,
+      speed: 180,
+      groundPad: 22,
+      topPad: 22,
+      distAcc: 0,
+      nextSpawnDist: 760,
+      obstacles: [],
+      nextRestAt: REST_EVERY_S,
+      restPending: false,
+      resting: false,
+      returning: false,
+      restT: 0,
+      returnT: 0,
+      restScale: 1,
+      restUiAlpha: 0,
 
-      // Blend mode approximation (browser support varies; if unsupported it falls back)
-      ctx.globalCompositeOperation = CRT_COMPOSITE;
+      helpOpen: false
+    };
 
-      ctx.globalAlpha = CRT_OPACITY;
-      ctx.fillStyle = pat;
+    const G = 2200;
+    const K_BASE = 30;
+    const K_BOOST = 1.2;
+    const DAMP_BASE = 22;
+    const VTERM = 2400;
 
-      // Align pattern to pixel grid (reduce shimmer)
-      ctx.translate(0.5 * dpr, 0.5 * dpr);
-      ctx.fillRect(-0.5 * dpr, -0.5 * dpr, w + dpr, h + dpr);
+    const G_FALL_SCALE_MIN = 0.02;
+    const G_FALL_CC_MAX = 100;
 
-      ctx.restore();
+    // ============================================================
+    // CC2 + pulse gating (ALWAYS 3 pulses, as requested)
+    // ============================================================
+    let cc2 = 0;
+    function setCC2(v) { cc2 = clamp(v | 0, 0, 127); }
 
-      // Reset (safety)
-      ctx.filter = 'none';
-      ctx.globalAlpha = 1;
-      ctx.globalCompositeOperation = 'source-over';
+    const PULSE_THRESHOLD = 32;
+    const PULSE_WINDOW_S = 1.6;
+
+    let prevCC2 = 0;
+    let pulseCount = 0;
+    let pulseWindowT = 0;
+
+    function resetPulses() {
+      pulseCount = 0;
+      pulseWindowT = 0;
+      prevCC2 = cc2;
     }
 
+    function registerPulse(dt) {
+      if (!currentInput) {
+        resetPulses();
+        return;
+      }
+
+      const rising = (prevCC2 < PULSE_THRESHOLD) && (cc2 >= PULSE_THRESHOLD);
+      prevCC2 = cc2;
+
+      if (pulseWindowT > 0) {
+        pulseWindowT = Math.max(0, pulseWindowT - dt);
+        if (pulseWindowT === 0) pulseCount = 0;
+      }
+
+      if (rising) {
+        if (pulseWindowT === 0) {
+          pulseWindowT = PULSE_WINDOW_S;
+          pulseCount = 1;
+        } else {
+          pulseCount += 1;
+        }
+
+        if (pulseCount >= 3) {
+          pulseCount = 0;
+          pulseWindowT = 0;
+
+          if (!world.started && !world.over) startGame();
+          else if (world.over) startGame();
+        }
+      }
+    }
+
+    // ============================================================
+    // Obstacles (unchanged)
+    // ============================================================
+    function spawnObstacle(w, h) {
+      const groundY = computeGroundY(w, h);
+      const ceilingY = world.topPad;
+
+      const gap = 150;
+      const kind = (Math.random() < 0.55) ? 'pipe' : 'block';
+      const vx = world.speed * dpr;
+
+      if (kind === 'pipe') {
+        const pipeW = 56 * dpr;
+        const gapCentreMin = ceilingY + 90 * dpr;
+        const gapCentreMax = groundY - 90 * dpr;
+        const gapCentre = clamp(
+          Math.round(gapCentreMin + Math.random() * (gapCentreMax - gapCentreMin)),
+          gapCentreMin, gapCentreMax
+        );
+
+        const topH = Math.max(20 * dpr, Math.round((gapCentre - (gap * dpr) / 2) - ceilingY));
+        const botY = Math.round(gapCentre + (gap * dpr) / 2);
+        const botH = Math.max(20 * dpr, Math.round(groundY - botY));
+
+        world.obstacles.push({
+          kind: 'pipe',
+          x: w + 20 * dpr,
+          w: pipeW,
+          vx,
+          top: { y: ceilingY, w: pipeW, h: topH },
+          bot: { y: botY,     w: pipeW, h: botH }
+        });
+      } else {
+        const blockW = Math.round((46 + Math.random() * 46) * dpr);
+        const blockH = Math.round((50 + Math.random() * 140) * dpr);
+        world.obstacles.push({
+          kind: 'block',
+          x: w + 20 * dpr,
+          y: groundY - blockH,
+          w: blockW,
+          h: blockH,
+          vx
+        });
+      }
+    }
+
+    // ============================================================
+    // On-CRT UI drawing helpers
+    // ============================================================
+    const UI_BOTTOM_BAND_PX = 56; // CSS px reserved for bottom controls
+
+    const ui = {
+      musicRect: null,
+      helpRect: null,
+      backRect: null
+    };
+
+    function uiScalePx() {
+      return clamp((renderCanvas.width / dpr) / 980, 0.90, 1.10);
+    }
+
+    function computeGroundY(w, h) {
+      const s = uiScalePx();
+      const m = Math.round(10 * s * dpr);
+      const by = h - m - Math.round(26 * s * dpr);
+
+      const groundYPhys = h - world.groundPad;
+      const groundYUiCap = by - Math.round(10 * s * dpr);
+
+      return Math.min(groundYPhys, groundYUiCap);
+    }
+
+    function roundRectPath(c, x, y, w, h, r) {
+      const rr = Math.min(r, w * 0.5, h * 0.5);
+      c.beginPath();
+      c.moveTo(x + rr, y);
+      c.arcTo(x + w, y, x + w, y + h, rr);
+      c.arcTo(x + w, y + h, x, y + h, rr);
+      c.arcTo(x, y + h, x, y, rr);
+      c.arcTo(x, y, x + w, y, rr);
+      c.closePath();
+    }
+
+    function drawPillAt(x, y, w, h, fillAlpha = 0.28, borderAlpha = 0.40) {
+      ctx.save();
+      ctx.globalAlpha = fillAlpha;
+      ctx.fillStyle = 'rgba(0,0,0,1)';
+      roundRectPath(ctx, x, y, w, h, 999 * dpr);
+      ctx.fill();
+
+      ctx.globalAlpha = borderAlpha;
+      ctx.strokeStyle = cssVar('--border');
+      ctx.lineWidth = Math.max(1, Math.round(1 * dpr));
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function pillMetrics(text, fontPx, padX, padY) {
+      ctx.save();
+      ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
+      const tw = Math.ceil(ctx.measureText(text).width);
+      ctx.restore();
+      const h = Math.round(fontPx + padY * 2);
+      const w = tw + padX * 2;
+      return { w, h };
+    }
+
+    function drawTextPill(x, y, text, opts = {}) {
+      const s = uiScalePx();
+      const padX = Math.round(10 * s * dpr);
+      const padY = Math.round(6 * s * dpr);
+      const fontPx = Math.round((12 * s) * dpr);
+
+      const { w, h } = pillMetrics(text, fontPx, padX, padY);
+      drawPillAt(x, y, w, h, opts.alpha ?? 0.28, opts.borderAlpha ?? 0.40);
+
+      ctx.save();
+      ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+      ctx.globalAlpha = opts.textAlpha ?? 0.90;
+      ctx.fillStyle = opts.colour ?? cssVar('--muted');
+      ctx.fillText(text, x + padX, y + Math.round(h * 0.5));
+      ctx.restore();
+
+      return { x, y, w, h };
+    }
+
+    function drawCircleButton(cx, cy, r, opts = {}) {
+      ctx.save();
+      ctx.globalAlpha = opts.alpha ?? 0.90;
+      ctx.fillStyle = 'rgba(0,0,0,0.28)';
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.globalAlpha = opts.borderAlpha ?? 0.45;
+      ctx.strokeStyle = cssVar('--border');
+      ctx.lineWidth = Math.max(1, Math.round(1 * dpr));
+      ctx.beginPath();
+      ctx.arc(cx, cy, r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+
+    function drawSpeakerIcon(cx, cy, size, on) {
+      // Minimal speaker glyph (no emoji) so it remains stylistically coherent.
+      const s = size;
+      const x = cx - s * 0.45;
+      const y = cy - s * 0.35;
+
+      ctx.save();
+      ctx.globalAlpha = on ? 0.95 : 0.65;
+      ctx.strokeStyle = on ? cssVar('--text') : cssVar('--muted');
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.lineWidth = Math.max(1, Math.round(1.6 * dpr));
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      // Speaker body (filled polygon)
+      ctx.beginPath();
+      ctx.moveTo(x, y + s * 0.25);
+      ctx.lineTo(x + s * 0.22, y + s * 0.25);
+      ctx.lineTo(x + s * 0.42, y + s * 0.10);
+      ctx.lineTo(x + s * 0.42, y + s * 0.60);
+      ctx.lineTo(x + s * 0.22, y + s * 0.45);
+      ctx.lineTo(x, y + s * 0.45);
+      ctx.closePath();
+      ctx.fill();
+
+      // Waves
+      if (on) {
+        ctx.beginPath();
+        ctx.arc(x + s * 0.48, y + s * 0.35, s * 0.18, -0.55, 0.55);
+        ctx.stroke();
+
+        ctx.beginPath();
+        ctx.arc(x + s * 0.48, y + s * 0.35, s * 0.30, -0.55, 0.55);
+        ctx.stroke();
+      } else {
+        // Muted X
+        ctx.beginPath();
+        ctx.moveTo(x + s * 0.54, y + s * 0.18);
+        ctx.lineTo(x + s * 0.80, y + s * 0.52);
+        ctx.moveTo(x + s * 0.80, y + s * 0.18);
+        ctx.lineTo(x + s * 0.54, y + s * 0.52);
+        ctx.stroke();
+      }
+
+      ctx.restore();
+    }
+
+    function drawGradientTitle(text, x, y, fontPx) {
+      const g = ctx.createLinearGradient(x - fontPx * 2.0, y, x + fontPx * 2.0, y);
+      g.addColorStop(0.0, cssVar('--accentA'));
+      g.addColorStop(1.0, cssVar('--accentB'));
+
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `900 ${fontPx}px Orbitron, system-ui, sans-serif`;
+
+      // subtle glow
+      ctx.globalAlpha = 0.20;
+      ctx.shadowColor = cssVar('--accentA');
+      ctx.shadowBlur = Math.round(14 * dpr);
+      ctx.fillStyle = g;
+      ctx.fillText(text, x, y);
+
+      ctx.shadowColor = cssVar('--accentB');
+      ctx.shadowBlur = Math.round(18 * dpr);
+      ctx.fillText(text, x, y);
+
+      // main
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 0.98;
+      ctx.fillStyle = g;
+      ctx.fillText(text, x, y);
+
+      ctx.restore();
+    }
+
+    function drawHelpOverlay(w, h) {
+      const s = uiScalePx();
+
+      // === Transparency controls (adjust these) ===
+      const HELP_DIM_ALPHA = 0.45;   // backdrop dim (0..1). Higher = darker background.
+      const HELP_BOX_ALPHA = 0.92;   // panel opacity (0..1). Higher = more opaque panel.
+      // ===========================================
+
+      // Backdrop
+      ctx.save();
+      ctx.globalAlpha = HELP_DIM_ALPHA;
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+
+      // Panel box
+      const boxW = Math.round(w * 0.86);
+      const boxH = Math.round(h * 0.68);
+      const boxX = Math.round((w - boxW) * 0.5);
+      const boxY = Math.round((h - boxH) * 0.5);
+      const r = Math.round(16 * s * dpr);
+
+      ctx.save();
+      ctx.globalAlpha = HELP_BOX_ALPHA;
+      ctx.fillStyle = 'rgba(0,0,0,0.78)';
+      roundRectPath(ctx, boxX, boxY, boxW, boxH, r);
+      ctx.fill();
+
+      ctx.globalAlpha = 0.70;
+      ctx.strokeStyle = cssVar('--border');
+      ctx.lineWidth = Math.max(1, Math.round(1 * dpr));
+      ctx.stroke();
+
+      // Text metrics
+      const pad = Math.round(18 * s * dpr);
+      const x0 = boxX + pad;
+      let y0 = boxY + pad;
+
+      const titlePx = Math.round((14 * s) * dpr);
+      const bodyPx  = Math.round((12 * s) * dpr);
+      const lineH   = Math.round((18 * s) * dpr);
+
+      const colText  = cssVar('--text');
+      const colMuted = cssVar('--muted');
+
+      function drawLine(text, opts = {}) {
+        ctx.save();
+        ctx.globalAlpha = opts.alpha ?? 0.92;
+        ctx.fillStyle = opts.colour ?? colMuted;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'top';
+        ctx.font = `${opts.weight ?? 400} ${opts.sizePx ?? bodyPx}px ${opts.family ?? '"JetBrains Mono", ui-monospace, monospace'}`;
+        ctx.fillText(text, x0, y0);
+        ctx.restore();
+        y0 += (opts.advance ?? lineH);
+      }
+
+      // Title
+      drawLine('Browser & MIDI Setup', {
+        colour: colText,
+        alpha: 0.95,
+        weight: 900,
+        sizePx: titlePx,
+        family: 'Orbitron, system-ui, sans-serif',
+        advance: Math.round(lineH * 1.1)
+      });
+
+      drawLine('Ventra uses WebMIDI. Support depends on browser.', {
+        colour: colMuted,
+        alpha: 0.90,
+        advance: Math.round(lineH * 1.2)
+      });
+
+      // Bullet sections (Chrome/Firefox/Safari)
+      const bullet = '• ';
+
+      // Chrome / Edge
+      drawLine(`${bullet}Chrome / Edge (recommended):`, { colour: colText, alpha: 0.92, weight: 800 });
+      drawLine('WebMIDI works natively. Plug in Ventra and refresh if not detected.', {
+        colour: colMuted, alpha: 0.92, advance: Math.round(lineH * 1.15)
+      });
+
+      // Firefox
+      drawLine(`${bullet}Firefox:`, { colour: colText, alpha: 0.92, weight: 800 });
+
+      drawLine('1) Close Firefox. Plug in Ventra. Reopen Firefox. (Otherwise Firefox may show no MIDI ports.)', { alpha: 0.92 });
+      drawLine('2) When prompted, Allow MIDI device access (and SysEx if requested).', { alpha: 0.92 });
+      drawLine('3) For music: click the speaker button once (autoplay is often blocked).', { alpha: 0.92 });
+
+      drawLine('If MIDI still does not work: open about:config → set dom.webmidi.enabled to true → refresh.', {
+        alpha: 0.92, advance: Math.round(lineH * 1.25)
+      });
+
+      // Safari
+      drawLine(`${bullet}Safari (macOS):`, { colour: colText, alpha: 0.92, weight: 800 });
+      drawLine('Develop → Experimental Features → enable WebMIDI. Restart browser if required.', {
+        colour: colMuted, alpha: 0.92, advance: Math.round(lineH * 1.25)
+      });
+
+      // Controls
+      drawLine('Controls:', { colour: colText, alpha: 0.92, weight: 800, advance: Math.round(lineH * 1.05) });
+      drawLine('• Breath controls height via CC2.', { alpha: 0.92 });
+      drawLine('• Start / restart: three breath pulses.', { alpha: 0.92, advance: Math.round(lineH * 1.15) });
+
+      // Close hint
+      drawLine('Click anywhere to close this help.', { colour: colMuted, alpha: 0.85 });
+
+      ctx.restore();
+    }
+
+    // ============================================================
+    // UI hit rectangles (scene-space, pre-barrel) in device pixels
+    // ============================================================
+    function rectHit(r, x, y) {
+      if (!r) return false;
+      return x >= r.x && x <= (r.x + r.w) && y >= r.y && y <= (r.y + r.h);
+    }
+
+    function clientToViewPx(evt) {
+      const rect = canvas.getBoundingClientRect();
+      const xCss = evt.clientX - rect.left;
+      const yCss = evt.clientY - rect.top;
+      return { x: xCss * dpr, y: yCss * dpr };
+    }
+
+    canvas.addEventListener('click', async (e) => {
+      const { w, h } = resizeCanvasToDisplaySize();
+      const v = clientToViewPx(e);
+      const sxy = viewToScene(v.x, v.y, w, h);
+
+      // Help open: click anywhere closes
+      if (world.helpOpen) {
+        world.helpOpen = false;
+        return;
+      }
+
+      if (rectHit(ui.musicRect, sxy.x, sxy.y)) {
+        setAudio(!audioOn);
+        // If we turned ON, try to start immediately (interaction occurred)
+        if (audioOn && world.started) await startMusicIfArmed();
+        return;
+      }
+
+      if (rectHit(ui.helpRect, sxy.x, sxy.y)) {
+        world.helpOpen = true;
+        return;
+      }
+
+      if (rectHit(ui.backRect, sxy.x, sxy.y)) {
+        window.location.href = './index.html';
+        return;
+      }
+    });
+
+    // ============================================================
+    // Game lifecycle
+    // ============================================================
+    function resetGame() {
+      const { w, h } = resizeCanvasToDisplaySize();
+
+      world.started = false;
+      world.over = false;
+
+      world.survive = 0;
+      world.playT = 0;
+      world.speed = world.baseSpeed;
+
+      world.distAcc = 0;
+      world.obstacles = [];
+      world.nextSpawnDist = 620;
+
+      world.nextRestAt = REST_EVERY_S;
+      world.restPending = false;
+      world.resting = false;
+      world.returning = false;
+      world.restT = 0;
+      world.returnT = 0;
+      world.restScale = 1;
+      world.restUiAlpha = 0;
+
+      // Start screen: monkey waits centred.
+      player.x = Math.round(w * 0.50);
+      player.y = Math.round(h * 0.54);
+      player.vy = 0;
+      player.tilt = 0;
+
+      tailVyFilt = 0;
+      resetPulses();
+    }
+
+    function startGame() {
+      if (!currentInput) return;
+
+      if (world.over) resetGame();
+
+      world.started = true;
+      world.over = false;
+      world.hasStartedOnce = true;
+
+      const { w, h } = resizeCanvasToDisplaySize();
+      player.x = Math.round(w * 0.22);
+      player.y = Math.round(h * 0.50);
+      player.vy = 0;
+      player.tilt = 0;
+      tailVyFilt = 0;
+
+      resetPulses();
+      startMusicIfArmed();
+    }
+
+    function gameOver() {
+      world.over = true;
+      world.started = false;
+
+      resetPulses();
+      stopMusic();
+
+      world.restPending = false;
+      world.resting = false;
+      world.returning = false;
+      world.restT = 0;
+      world.returnT = 0;
+      world.restScale = 1;
+      world.restUiAlpha = 0;
+
+      const { w, h } = resizeCanvasToDisplaySize();
+      player.x = Math.round(w * 0.50);
+      player.y = Math.round(h * 0.54);
+      player.vy = 0;
+      player.tilt = 0;
+      tailVyFilt = 0;
+    }
+
+    // ============================================================
+    // Drawing
+    // ============================================================
     function drawScene(w, h) {
       ctx.clearRect(0, 0, w, h);
-
-      const groundY = h - world.groundPad;
 
       const border = cssVar('--border');
       const accentA = cssVar('--accentA');
@@ -1194,14 +1239,34 @@
       const text = cssVar('--text');
       const muted = cssVar('--muted');
 
-      // Ground
+      // Background remains black; add subtle vignette
+      ctx.save();
+      const v = ctx.createRadialGradient(w * 0.5, h * 0.5, Math.min(w, h) * 0.10, w * 0.5, h * 0.5, Math.min(w, h) * 0.80);
+      v.addColorStop(0.0, 'rgba(0,0,0,0.00)');
+      v.addColorStop(1.0, 'rgba(0,0,0,0.55)');
+      ctx.fillStyle = v;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+
+      // Bottom UI placement (used to avoid the ground line cutting through buttons)
+      const s = uiScalePx();
+      const m = Math.round(10 * s * dpr);
+      const by = h - m - Math.round(26 * s * dpr);
+      
+      // Physics ground (unchanged)
+      const groundYPhys = h - world.groundPad;
+
+      // Visual ground line: keep it ABOVE the bottom controls
+      const groundYDraw = computeGroundY(w, h);
+
+      // Draw ground line
       ctx.save();
       ctx.globalAlpha = 0.9;
       ctx.strokeStyle = border;
       ctx.lineWidth = 2 * dpr;
       ctx.beginPath();
-      ctx.moveTo(0, groundY + 1);
-      ctx.lineTo(w, groundY + 1);
+      ctx.moveTo(0, groundYDraw + 1);
+      ctx.lineTo(w, groundYDraw + 1);
       ctx.stroke();
       ctx.restore();
 
@@ -1231,8 +1296,8 @@
       const drawH = MONKEY_DRAW_H * dpr;
 
       if (monkeyReady) {
-        const s = (world.resting || world.returning) ? world.restScale : 1;
-        drawMonkeyNeon(player.x, player.y, player.tilt, drawW, drawH, s);
+        const sLocal = (world.resting || world.returning) ? world.restScale : 1;
+        drawMonkeyNeon(player.x, player.y, player.tilt, drawW, drawH, sLocal);
       } else {
         ctx.save();
         ctx.fillStyle = text;
@@ -1249,10 +1314,169 @@
         ctx.restore();
       }
 
-      // CRT overlay is part of the scene (so it gets barrel distortion)
-      drawCrtOverlayIntoScene(w, h);
+      // =========================
+      // On-CRT UI (NO duplication)
+      // =========================
+      const topY = m;
 
-      // Breath phase overlay + 3-count (fades during fly-back)
+      const ventraText = (!('requestMIDIAccess' in navigator))
+        ? 'Ventra not supported in this browser'
+        : (currentInput ? 'Ventra connected' : 'Ventra not connected — plug in and refresh');
+
+      const left = drawTextPill(m, topY, ventraText, { colour: currentInput ? cssVar('--text') : cssVar('--muted'), alpha: 0.28 });
+
+      const ccText = `CC2: ${String(cc2).padStart(3, '0')}`;
+      // measure-first for right aligned (no redraw)
+      {
+        const s2 = uiScalePx();
+        const padX = Math.round(10 * s2 * dpr);
+        const padY = Math.round(6 * s2 * dpr);
+        const fontPx = Math.round((12 * s2) * dpr);
+        const { w: pillW, h: pillH } = pillMetrics(ccText, fontPx, padX, padY);
+        const x = w - m - pillW;
+        drawPillAt(x, topY, pillW, pillH, 0.28, 0.40);
+
+        ctx.save();
+        ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
+        ctx.textBaseline = 'middle';
+        ctx.textAlign = 'left';
+        ctx.globalAlpha = 0.90;
+        ctx.fillStyle = cssVar('--muted');
+        ctx.fillText(ccText, x + padX, topY + Math.round(pillH * 0.5));
+        ctx.restore();
+      }
+
+      // HUD (time/speed) on the right during play
+      if (world.started && !world.over) {
+        const t1 = `Time: ${world.survive.toFixed(1)} s`;
+        const t2 = `Speed: ${world.speed.toFixed(0)}`;
+        const hudY = topY + Math.round(32 * s * dpr);
+
+        // time
+        {
+          const s2 = uiScalePx();
+          const padX = Math.round(10 * s2 * dpr);
+          const padY = Math.round(6 * s2 * dpr);
+          const fontPx = Math.round((12 * s2) * dpr);
+          const { w: pillW, h: pillH } = pillMetrics(t1, fontPx, padX, padY);
+          const x = w - m - pillW;
+          drawPillAt(x, hudY, pillW, pillH, 0.22, 0.30);
+          ctx.save();
+          ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
+          ctx.textBaseline = 'middle';
+          ctx.textAlign = 'left';
+          ctx.globalAlpha = 0.80;
+          ctx.fillStyle = cssVar('--muted');
+          ctx.fillText(t1, x + padX, hudY + Math.round(pillH * 0.5));
+          ctx.restore();
+        }
+
+        // speed
+        {
+          const s2 = uiScalePx();
+          const padX = Math.round(10 * s2 * dpr);
+          const padY = Math.round(6 * s2 * dpr);
+          const fontPx = Math.round((12 * s2) * dpr);
+          const { w: pillW, h: pillH } = pillMetrics(t2, fontPx, padX, padY);
+          const y = hudY + Math.round(28 * s * dpr);
+          const x = w - m - pillW;
+          drawPillAt(x, y, pillW, pillH, 0.22, 0.30);
+          ctx.save();
+          ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
+          ctx.textBaseline = 'middle';
+          ctx.textAlign = 'left';
+          ctx.globalAlpha = 0.80;
+          ctx.fillStyle = cssVar('--muted');
+          ctx.fillText(t2, x + padX, y + Math.round(pillH * 0.5));
+          ctx.restore();
+        }
+      }
+
+      // Bottom controls: Back pill + Help circle + Speaker circle
+      // Back pill
+      const back = drawTextPill(m, by, 'Back', { colour: cssVar('--muted'), alpha: 0.28 });
+      ui.backRect = back;
+
+      // Help circle (right)
+      const rBtn = Math.round(13 * s * dpr);
+      const helpCx = w - m - rBtn;
+      const helpCy = by + rBtn;
+      drawCircleButton(helpCx, helpCy, rBtn, { alpha: 0.90, borderAlpha: 0.45 });
+      ctx.save();
+      ctx.globalAlpha = 0.92;
+      ctx.fillStyle = cssVar('--text');
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.font = `900 ${Math.round(14 * s * dpr)}px Orbitron, system-ui, sans-serif`;
+      ctx.fillText('?', helpCx, helpCy + Math.round(0.5 * dpr));
+      ctx.restore();
+      ui.helpRect = { x: helpCx - rBtn, y: helpCy - rBtn, w: rBtn * 2, h: rBtn * 2 };
+
+      // Speaker circle (left of help)
+      const spCx = helpCx - Math.round((2 * rBtn + 10 * s * dpr));
+      const spCy = helpCy;
+      drawCircleButton(spCx, spCy, rBtn, { alpha: 0.90, borderAlpha: 0.45 });
+      drawSpeakerIcon(spCx, spCy, Math.round(18 * s * dpr), audioOn);
+      ui.musicRect = { x: spCx - rBtn, y: spCy - rBtn, w: rBtn * 2, h: rBtn * 2 };
+
+      // Start screen title + instruction
+      if (!world.started && !world.over) {
+        const bigPx = Math.round((40 * s) * dpr);
+        const smallPx = Math.round((16 * s) * dpr);
+
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = `900 ${smallPx}px Orbitron, system-ui, sans-serif`;
+        ctx.globalAlpha = 0.70;
+        ctx.fillStyle = muted;
+        ctx.fillText('VENTRA', Math.round(w * 0.5), Math.round(h * 0.205));
+        ctx.restore();
+
+        drawGradientTitle('EXHALE//ASCEND', Math.round(w * 0.5), Math.round(h * 0.26), bigPx);
+
+        const msg = currentInput
+          ? 'Start with three breath pulses'
+          : 'Plug in Ventra, refresh, then start';
+
+        const prog = currentInput
+          ? `Pulses: ${String(pulseCount).padStart(1, '0')} / 3`
+          : 'Waiting for MIDI device…';
+
+        ctx.save();
+        const tPx = Math.round((12 * s) * dpr);
+        ctx.font = `${tPx}px "JetBrains Mono", ui-monospace, monospace`;
+        ctx.fillStyle = muted;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.globalAlpha = 0.92;
+        ctx.fillText(msg, Math.round(w * 0.5), Math.round(h * 0.34));
+        ctx.globalAlpha = 0.75;
+        ctx.fillText(prog, Math.round(w * 0.5), Math.round(h * 0.38));
+        ctx.restore();
+      }
+
+      // Game-over overlay
+      if (world.over) {
+        const s2 = uiScalePx();
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        ctx.font = `900 ${Math.round(26 * s2 * dpr)}px Orbitron, system-ui, sans-serif`;
+        ctx.fillStyle = text;
+        ctx.globalAlpha = 0.92;
+        ctx.fillText('GAME OVER', Math.round(w * 0.5), Math.round(h * 0.26));
+
+        ctx.font = `${Math.round(12 * s2 * dpr)}px "JetBrains Mono", ui-monospace, monospace`;
+        ctx.fillStyle = muted;
+        ctx.globalAlpha = 0.88;
+        ctx.fillText(`Survived: ${world.survive.toFixed(1)} s`, Math.round(w * 0.5), Math.round(h * 0.34));
+        ctx.fillText('Restart with three breath pulses', Math.round(w * 0.5), Math.round(h * 0.38));
+        ctx.restore();
+      }
+
+      // Breath phase overlay (unchanged)
       if (world.started && (world.resting || world.returning)) {
         const aUi = clamp(world.restUiAlpha, 0, 1);
         if (aUi > 0) {
@@ -1294,9 +1518,14 @@
         ctx.textAlign = 'right';
         ctx.textBaseline = 'bottom';
         ctx.font = `${Math.round(11 * dpr)}px "JetBrains Mono", ui-monospace, monospace`;
-        ctx.fillText('Clearing…', Math.round(w - 10 * dpr), Math.round(h - 10 * dpr));
+        ctx.fillText('Clearing…', Math.round(w - 10 * dpr), Math.round(h - 44 * dpr));
         ctx.restore();
       }
+
+      if (world.helpOpen) drawHelpOverlay(w, h);
+
+      // CRT overlay MUST be drawn last so it sits over everything (title, UI, game)
+      drawCrtOverlayIntoScene(w, h);
 
       if (SHOW_COLLISION_DEBUG) {
         const a = Math.max(8 * dpr, (drawW * COLL_A_FRAC));
@@ -1310,21 +1539,23 @@
       }
     }
 
+    // ============================================================
+    // Main loop (physics/mechanics unchanged)
+    // ============================================================
     let lastTs = 0;
+
     function step(ts) {
       const { w, h } = resizeCanvasToDisplaySize();
 
       const dt = Math.min(0.033, Math.max(0.001, (ts - (lastTs || ts)) / 1000));
       lastTs = ts;
 
+      // If Ventra disappears mid-run: stop play and return to start screen.
       if (!currentInput) {
         setCC2(0);
         if (world.started) {
           world.started = false;
           world.over = false;
-          overlay.style.display = 'grid';
-          overlayTitle.textContent = 'Ventra required';
-          overlayText.innerHTML = 'Plug in Ventra, refresh, then start with <span class="kbd">three breath pulses</span>.';
           stopMusic();
           resetPulses();
           tailVyFilt = 0;
@@ -1336,12 +1567,17 @@
           world.returnT = 0;
           world.restScale = 1;
           world.restUiAlpha = 0;
+
+          player.x = Math.round(w * 0.50);
+          player.y = Math.round(h * 0.54);
+          player.vy = 0;
+          player.tilt = 0;
         }
       }
 
       registerPulse(dt);
 
-      const groundY = h - world.groundPad;
+      const groundY = computeGroundY(w, h);
       const ceilingY = world.topPad;
 
       if (world.started && !world.over) {
@@ -1533,11 +1769,15 @@
         tailVyFilt *= 0.90;
         world.restScale = 1;
         world.restUiAlpha = 0;
+
+        if (!world.over) {
+          const cx = Math.round(w * 0.50);
+          const cy = Math.round(h * 0.54);
+          player.x = expApproach(player.x, cx, dt, 0.12);
+          player.y = expApproach(player.y, cy, dt, 0.12);
+        }
       }
 
-      updateHUD();
-
-      // Scene -> offscreen (includes CRT), then barrel -> onscreen
       drawScene(w, h);
       presentWithBarrel(w, h);
 
@@ -1557,23 +1797,9 @@
       }
     }
 
-    const helpBtn = document.getElementById('helpBtn');
-    const helpDialog = document.getElementById('helpDialog');
-    const closeHelp = document.getElementById('closeHelp');
-
-    helpBtn.addEventListener('click', () => { helpDialog.showModal(); });
-    closeHelp.addEventListener('click', () => { helpDialog.close(); });
-
-    helpDialog.addEventListener('click', (e) => {
-      const rect = helpDialog.getBoundingClientRect();
-      const inside =
-        e.clientX >= rect.left &&
-        e.clientX <= rect.right &&
-        e.clientY >= rect.top &&
-        e.clientY <= rect.bottom;
-      if (!inside) helpDialog.close();
-    });
-
+    // ============================================================
+    // Boot
+    // ============================================================
     resetGame();
     setCC2(0);
     requestAnimationFrame(step);
