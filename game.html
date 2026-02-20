@@ -395,6 +395,11 @@
     async function startMusicIfArmed() {
       if (!bgm) return;
       if (!musicIsArmed()) return;
+
+      // Ensure WebAudio graph exists (safe if already built).
+      // This must be called from a user gesture for best reliability.
+      try { await ensureAudioFX(); } catch (e) { console.warn(e); }
+
       try { await bgm.play(); }
       catch (e) { /* autoplay blocks are expected */ }
     }
@@ -410,6 +415,291 @@
       localStorage.setItem(AUDIO_KEY, audioOn ? '1' : '0');
       if (!audioOn) stopMusic();
       else if (world && world.started) startMusicIfArmed();
+    }
+
+    // ============================================================
+    // Neo-retro master bus (WebAudio FX for <audio id="bgm">)
+    // ============================================================
+
+    // --- Tonal framing (authentic-ish bandwidth) ---
+    const FX_HIGHPASS_HZ = 450;     // remove sub-rumble
+    const FX_LOWPASS_HZ  = 8000;  // shave hi-fi sheen
+
+    // --- Saturation (neo-retro "cabinet edge") ---
+    const FX_SAT_DRIVE   = 0.12;   // 0..1-ish (soft)
+    const FX_SAT_MIX     = 0.05;   // 0..1 (parallel saturation amount)
+
+    // --- Glue compression (subtle) ---
+    const FX_COMP_THRESH_DB = -22;
+    const FX_COMP_RATIO     = 2.0;
+    const FX_COMP_ATTACK_S  = 0.010;
+    const FX_COMP_RELEASE_S = 0.140;
+    const FX_COMP_KNEE_DB   = 12;
+
+    // --- Short "digital plate-ish" reverb (tasteful) ---
+    const FX_VERB_WET       = 0.6;   // 0..1 (keep small)
+    const FX_VERB_DECAY_S   = 0.55;   // short tail
+    const FX_VERB_HIGHPASS_HZ = 320;  // keep low-end clean
+    const FX_VERB_LOWPASS_HZ  = 7500; // keep tail retro
+
+    // --- Optional parallel bitcrush (neo texture) ---
+    const FX_BITCRUSH_ENABLED   = true;
+    const FX_BITCRUSH_WET       = 0.05;  // 0..1 (keep small)
+    const FX_BITCRUSH_BITDEPTH  = 8;     // 6..12 typical
+    const FX_BITCRUSH_REDUCE    = 0.8;  // 0..1 (more = more downsample)
+
+    // --- Output ---
+    const FX_MASTER_GAIN = 0.85;
+
+
+
+    let audioCtx = null;
+    let fx = null; // {src, inGain, hp, lp, satDry, satWet, satMix, comp, verbSend, verbWet, master, bitDry, bitWet, ...}
+
+    function makeSoftClipCurve(drive = 0.5, n = 4096) {
+      // Smooth-ish saturator curve (tanh-like) without heavy aliasing.
+      const curve = new Float32Array(n);
+      const k = 1 + 20 * clamp(drive, 0, 1); // scale
+      for (let i = 0; i < n; i++) {
+        const x = (i * 2) / (n - 1) - 1; // -1..1
+        curve[i] = Math.tanh(k * x) / Math.tanh(k);
+      }
+      return curve;
+    }
+
+    function createImpulseResponse(ctxLocal, durationS, decay) {
+      // Synthetic noise IR -> filtered later; small + cheap.
+      const sr = ctxLocal.sampleRate;
+      const len = Math.max(1, Math.floor(sr * durationS));
+      const ir = ctxLocal.createBuffer(2, len, sr);
+
+      for (let ch = 0; ch < 2; ch++) {
+        const data = ir.getChannelData(ch);
+        for (let i = 0; i < len; i++) {
+          const t = i / sr;
+          const env = Math.pow(1 - (i / len), decay); // exponential-ish
+          data[i] = (Math.random() * 2 - 1) * env;
+        }
+      }
+      return ir;
+    }
+
+    async function ensureAudioFX() {
+      if (!bgm) return null;
+
+      if (!audioCtx) {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+
+      if (audioCtx.state === 'suspended') {
+        // Must be called from a user gesture (click/tap).
+        try { await audioCtx.resume(); } catch {}
+      }
+
+      if (fx) return fx;
+
+      // MediaElementSource must be created once per <audio> element.
+      const src = audioCtx.createMediaElementSource(bgm);
+
+      // Input trim (optional, for headroom before saturation)
+      const inGain = audioCtx.createGain();
+      inGain.gain.value = 1.0;
+
+      // Bandwidth framing
+      const hp = audioCtx.createBiquadFilter();
+      hp.type = 'highpass';
+      hp.frequency.value = FX_HIGHPASS_HZ;
+      hp.Q.value = 0.707;
+
+      const lp = audioCtx.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = FX_LOWPASS_HZ;
+      lp.Q.value = 0.707;
+
+      // Parallel saturation
+      const satDry = audioCtx.createGain();
+      satDry.gain.value = 1.0;
+
+      const satShaper = audioCtx.createWaveShaper();
+      satShaper.curve = makeSoftClipCurve(FX_SAT_DRIVE);
+      satShaper.oversample = '2x';
+
+      const satWet = audioCtx.createGain();
+      satWet.gain.value = 1.0;
+
+      const satMix = audioCtx.createGain();
+      satMix.gain.value = clamp(FX_SAT_MIX, 0, 1);
+
+      const satDryToComp = audioCtx.createGain();
+      satDryToComp.gain.value = 1.0 - clamp(FX_SAT_MIX, 0, 1);
+
+      // Compressor (glue)
+      const comp = audioCtx.createDynamicsCompressor();
+      comp.threshold.value = FX_COMP_THRESH_DB;
+      comp.ratio.value = FX_COMP_RATIO;
+      comp.attack.value = FX_COMP_ATTACK_S;
+      comp.release.value = FX_COMP_RELEASE_S;
+      comp.knee.value = FX_COMP_KNEE_DB;
+
+      // Reverb send (short, filtered)
+      const verbSend = audioCtx.createGain();
+      verbSend.gain.value = 1.0;
+
+      const convolver = audioCtx.createConvolver();
+      convolver.buffer = createImpulseResponse(audioCtx, FX_VERB_DECAY_S, 2.2);
+
+      // Filter the reverb return to keep it "retro-clean"
+      const verbHP = audioCtx.createBiquadFilter();
+      verbHP.type = 'highpass';
+      verbHP.frequency.value = FX_VERB_HIGHPASS_HZ;
+      verbHP.Q.value = 0.707;
+
+      const verbLP = audioCtx.createBiquadFilter();
+      verbLP.type = 'lowpass';
+      verbLP.frequency.value = FX_VERB_LOWPASS_HZ;
+      verbLP.Q.value = 0.707;
+
+      const verbWet = audioCtx.createGain();
+      verbWet.gain.value = clamp(FX_VERB_WET, 0, 1);
+
+      // Optional parallel bitcrush (AudioWorklet, inline module)
+      let bitNode = null;
+      let bitWet = null;
+      let bitDry = null;
+
+      if (FX_BITCRUSH_ENABLED && audioCtx.audioWorklet) {
+        const workletCode = `
+          class BitCrusher extends AudioWorkletProcessor {
+            static get parameterDescriptors() {
+              return [
+                { name: 'bitDepth', defaultValue: 8, minValue: 2, maxValue: 16, automationRate: 'k-rate' },
+                { name: 'reduce',   defaultValue: 0.4, minValue: 0, maxValue: 1,  automationRate: 'k-rate' }
+              ];
+            }
+            constructor() {
+              super();
+              this._phase = 0;
+              this._hold = 0;
+            }
+            process(inputs, outputs, parameters) {
+              const input = inputs[0];
+              const output = outputs[0];
+              if (!input || input.length === 0) return true;
+
+              const bd = parameters.bitDepth[0];
+              const reduce = parameters.reduce[0];
+
+              const step = Math.pow(0.5, bd);
+              // reduction: 0 => no hold, 1 => max hold (lower effective sample-rate)
+              const holdN = 1 + Math.floor(reduce * 40);
+
+              for (let ch = 0; ch < input.length; ch++) {
+                const inp = input[ch];
+                const out = output[ch];
+                for (let i = 0; i < inp.length; i++) {
+                  this._phase++;
+                  if (this._phase >= holdN) {
+                    this._phase = 0;
+                    // quantise sample amplitude
+                    const x = inp[i];
+                    this._hold = Math.round(x / step) * step;
+                  }
+                  out[i] = this._hold;
+                }
+              }
+              return true;
+            }
+          }
+          registerProcessor('bit-crusher', BitCrusher);
+        `;
+        const blob = new Blob([workletCode], { type: 'application/javascript' });
+        const url = URL.createObjectURL(blob);
+        try {
+          await audioCtx.audioWorklet.addModule(url);
+          bitNode = new AudioWorkletNode(audioCtx, 'bit-crusher');
+          bitNode.parameters.get('bitDepth').value = FX_BITCRUSH_BITDEPTH;
+          bitNode.parameters.get('reduce').value = FX_BITCRUSH_REDUCE;
+
+          bitDry = audioCtx.createGain();
+          bitDry.gain.value = 1.0 - clamp(FX_BITCRUSH_WET, 0, 1);
+
+          bitWet = audioCtx.createGain();
+          bitWet.gain.value = clamp(FX_BITCRUSH_WET, 0, 1);
+        } catch (e) {
+          console.warn('Bitcrush worklet unavailable; continuing without bitcrush.', e);
+          bitNode = null;
+        } finally {
+          URL.revokeObjectURL(url);
+        }
+      }
+
+      // Master
+      const master = audioCtx.createGain();
+      master.gain.value = FX_MASTER_GAIN;
+
+      // ---------------------------
+      // Wiring (graph)
+      // ---------------------------
+
+      // src -> inGain -> hp -> lp
+      src.connect(inGain);
+      inGain.connect(hp);
+      hp.connect(lp);
+
+      // Split for parallel saturation:
+      // lp -> satDryToComp -> comp
+      lp.connect(satDry);
+      satDry.connect(satDryToComp);
+
+      // lp -> satShaper -> satWet -> satMix -> comp
+      lp.connect(satShaper);
+      satShaper.connect(satWet);
+      satWet.connect(satMix);
+
+      // sum into comp
+      satDryToComp.connect(comp);
+      satMix.connect(comp);
+
+      // Reverb send from pre-comp (more “retro”), and return mixed post-comp
+      lp.connect(verbSend);
+      verbSend.connect(convolver);
+      convolver.connect(verbHP);
+      verbHP.connect(verbLP);
+      verbLP.connect(verbWet);
+
+      // Post-comp summing: comp + verbWet -> (optional bitcrush parallel) -> master -> destination
+      const postSum = audioCtx.createGain();
+      postSum.gain.value = 1.0;
+
+      comp.connect(postSum);
+      verbWet.connect(postSum);
+
+      if (bitNode && bitDry && bitWet) {
+        // parallel bitcrush (postSum -> dry + crushed -> master)
+        postSum.connect(bitDry);
+        postSum.connect(bitNode);
+        bitNode.connect(bitWet);
+
+        bitDry.connect(master);
+        bitWet.connect(master);
+      } else {
+        postSum.connect(master);
+      }
+
+      master.connect(audioCtx.destination);
+
+      fx = {
+        src,
+        inGain, hp, lp,
+        satShaper, satDryToComp, satMix,
+        comp,
+        verbSend, convolver, verbHP, verbLP, verbWet,
+        postSum,
+        bitNode, bitDry, bitWet,
+        master
+      };
+
+      return fx;
     }
 
     // ============================================================
@@ -1250,6 +1540,9 @@
     }
 
     canvas.addEventListener('click', async (e) => {
+      // Ensure AudioContext is resumed on a user gesture.
+      try { await ensureAudioFX(); } catch {}
+
       const { w, h } = resizeCanvasToDisplaySize();
       const v = clientToViewPx(e);
       const sxy = viewToScene(v.x, v.y, w, h);
