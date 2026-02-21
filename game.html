@@ -1231,6 +1231,31 @@
     }
 
     // ============================================================
+    // HUD toggles + style
+    // ============================================================
+
+    // Master toggles
+    const HUD_SHOW_TOP_LEFT_STATUS = true;  // "Ventra connected..."
+    const HUD_SHOW_CC2             = true;
+    const HUD_SHOW_TIME            = true;
+    const HUD_SHOW_SPEED           = false; // default OFF as requested
+
+    // If you want these only while playing:
+    const HUD_TOP_ONLY_DURING_PLAY = false; // if true, hides status/cc2 until started
+
+    // HUD styling: 'text' | 'box' | 'pill'
+    const HUD_STYLE = 'text';
+
+    // Fine controls
+    const HUD_TEXT_ALPHA     = 0.85;
+    const HUD_MUTED_ALPHA    = 0.78;
+    const HUD_LINE_GAP_PX    = 6;     // CSS px between HUD lines
+    const HUD_BOX_PAD_X_PX   = 6;     // CSS px (for box/pill only)
+    const HUD_BOX_PAD_Y_PX   = 3;     // CSS px (for box/pill only)
+    const HUD_BOX_ALPHA      = 0.10;  // background fill (box/pill)
+    const HUD_BORDER_ALPHA   = 0.35;  // outline
+
+    // ============================================================
     // On-CRT UI drawing helpers
     // ============================================================
     const UI_BOTTOM_BAND_PX = 56; // CSS px reserved for bottom controls
@@ -1302,6 +1327,87 @@
       const h = Math.round(fontPx + padY * 2);
       const w = tw + padX * 2;
       return { w, h };
+    }
+
+    function drawHudLabelRight(xRight, y, text, opts = {}) {
+      const s = uiScalePx();
+      const fontPx = Math.round((12 * s) * dpr);
+
+      ctx.save();
+      ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
+      ctx.textBaseline = 'top';
+      ctx.textAlign = 'right';
+      ctx.globalAlpha = opts.alpha ?? HUD_TEXT_ALPHA;
+      ctx.fillStyle = opts.colour ?? cssVar('--muted');
+      ctx.fillText(text, xRight, y);
+      ctx.restore();
+
+      return Math.round(fontPx + HUD_LINE_GAP_PX * s * dpr);
+    }
+
+    function drawHudLabelLeft(xLeft, y, text, opts = {}) {
+      const s = uiScalePx();
+      const fontPx = Math.round((12 * s) * dpr);
+
+      ctx.save();
+      ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
+      ctx.textBaseline = 'top';
+      ctx.textAlign = 'left';
+      ctx.globalAlpha = opts.alpha ?? HUD_TEXT_ALPHA;
+      ctx.fillStyle = opts.colour ?? cssVar('--muted');
+      ctx.fillText(text, xLeft, y);
+      ctx.restore();
+
+      return Math.round(fontPx + HUD_LINE_GAP_PX * s * dpr);
+    }
+
+    function drawHudContainer(x, y, text, align /* 'left'|'right' */, opts = {}) {
+      // Draw text with optional thin box or pill behind it, depending on HUD_STYLE.
+      const s = uiScalePx();
+      const fontPx = Math.round((12 * s) * dpr);
+      const padX = Math.round(HUD_BOX_PAD_X_PX * s * dpr);
+      const padY = Math.round(HUD_BOX_PAD_Y_PX * s * dpr);
+
+      ctx.save();
+      ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
+      const tw = Math.ceil(ctx.measureText(text).width);
+      const th = Math.round(fontPx);
+      ctx.restore();
+
+      const bw = tw + padX * 2;
+      const bh = th + padY * 2;
+
+      const x0 = (align === 'right') ? (x - bw) : x;
+      const y0 = y;
+
+      if (HUD_STYLE === 'pill') {
+        drawPillAt(x0, y0, bw, bh, HUD_BOX_ALPHA, HUD_BORDER_ALPHA);
+      } else if (HUD_STYLE === 'box') {
+        ctx.save();
+        ctx.globalAlpha = HUD_BOX_ALPHA;
+        ctx.fillStyle = 'rgba(0,0,0,1)';
+        ctx.fillRect(x0, y0, bw, bh);
+        ctx.globalAlpha = HUD_BORDER_ALPHA;
+        ctx.strokeStyle = cssVar('--border');
+        ctx.lineWidth = Math.max(1, Math.round(1 * dpr));
+        ctx.strokeRect(x0 + 0.5 * dpr, y0 + 0.5 * dpr, bw - 1 * dpr, bh - 1 * dpr);
+        ctx.restore();
+      }
+      // HUD_STYLE === 'text' draws no container.
+
+      ctx.save();
+      ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
+      ctx.textBaseline = 'top';
+      ctx.textAlign = (align === 'right') ? 'right' : 'left';
+      ctx.globalAlpha = opts.alpha ?? HUD_TEXT_ALPHA;
+      ctx.fillStyle = opts.colour ?? cssVar('--muted');
+
+      const tx = (align === 'right') ? x : (x0 + padX);
+      const ty = y0 + padY;
+      ctx.fillText(text, tx, ty);
+      ctx.restore();
+
+      return Math.round(bh + HUD_LINE_GAP_PX * s * dpr);
     }
 
     function drawTextPill(x, y, text, opts = {}) {
@@ -1786,78 +1892,74 @@
       // =========================
       // On-CRT UI (NO duplication)
       // =========================
-      const topY = m;
+      const HUD_TOP_OFFSET_PX = 8; // CSS px, adjust 4–12
+      const topY = m + Math.round(HUD_TOP_OFFSET_PX * dpr);
 
+      // Decide whether top HUD should appear right now
+      const showTopHudNow = HUD_TOP_ONLY_DURING_PLAY ? (world.started && !world.over) : true;
+
+      // Compose strings
       const ventraText = (!('requestMIDIAccess' in navigator))
         ? 'Ventra not supported in this browser'
         : (currentInput ? 'Ventra connected' : 'Ventra not connected — plug in and refresh');
 
-      const left = drawTextPill(mX, topY, ventraText, { colour: currentInput ? cssVar('--text') : cssVar('--muted'), alpha: 0.28 });
-
       const ccText = `CC2: ${String(cc2).padStart(3, '0')}`;
-      // measure-first for right aligned (no redraw)
-      {
-        const s2 = uiScalePx();
-        const padX = Math.round(10 * s2 * dpr);
-        const padY = Math.round(6 * s2 * dpr);
-        const fontPx = Math.round((12 * s2) * dpr);
-        const { w: pillW, h: pillH } = pillMetrics(ccText, fontPx, padX, padY);
-        const x = w - mX - pillW;
-        drawPillAt(x, topY, pillW, pillH, 0.28, 0.40);
+      const t1 = `Time ${world.survive.toFixed(1)} s`;
+      const t2 = `Speed ${world.speed.toFixed(0)}`;
 
-        ctx.save();
-        ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
-        ctx.textBaseline = 'middle';
-        ctx.textAlign = 'left';
-        ctx.globalAlpha = 0.90;
-        ctx.fillStyle = cssVar('--muted');
-        ctx.fillText(ccText, x + padX, topY + Math.round(pillH * 0.5));
-        ctx.restore();
+      // --- Top-left status (recommended to keep, but text-only/box) ---
+      if (showTopHudNow && HUD_SHOW_TOP_LEFT_STATUS) {
+        if (HUD_STYLE === 'text') {
+          drawHudLabelLeft(
+            mX,
+            topY,
+            ventraText,
+            { colour: currentInput ? cssVar('--text') : cssVar('--muted'), alpha: currentInput ? HUD_TEXT_ALPHA : HUD_MUTED_ALPHA }
+          );
+        } else {
+          drawHudContainer(
+            mX,
+            topY,
+            ventraText,
+            'left',
+            { colour: currentInput ? cssVar('--text') : cssVar('--muted'), alpha: currentInput ? HUD_TEXT_ALPHA : HUD_MUTED_ALPHA }
+          );
+        }
       }
 
-      // HUD (time/speed) on the right during play
-      if (world.started && !world.over) {
-        const t1 = `Time: ${world.survive.toFixed(1)} s`;
-        const t2 = `Speed: ${world.speed.toFixed(0)}`;
-        const hudY = topY + Math.round(32 * s * dpr);
+      // --- Top-right stack (CC2 always useful; time useful; speed default off) ---
+      if (showTopHudNow) {
+        let y = topY;
 
-        // time
-        {
-          const s2 = uiScalePx();
-          const padX = Math.round(10 * s2 * dpr);
-          const padY = Math.round(6 * s2 * dpr);
-          const fontPx = Math.round((12 * s2) * dpr);
-          const { w: pillW, h: pillH } = pillMetrics(t1, fontPx, padX, padY);
-          const x = w - mX - pillW;
-          drawPillAt(x, hudY, pillW, pillH, 0.22, 0.30);
-          ctx.save();
-          ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
-          ctx.textBaseline = 'middle';
-          ctx.textAlign = 'left';
-          ctx.globalAlpha = 0.80;
-          ctx.fillStyle = cssVar('--muted');
-          ctx.fillText(t1, x + padX, hudY + Math.round(pillH * 0.5));
-          ctx.restore();
+        // Right edge anchor (keep your corner inset behaviour)
+        const xRight = w - mX;
+
+        // CC2
+        if (HUD_SHOW_CC2) {
+          if (HUD_STYLE === 'text') {
+            y += drawHudLabelRight(xRight, y, ccText, { colour: cssVar('--muted'), alpha: HUD_TEXT_ALPHA });
+          } else {
+            y += drawHudContainer(xRight, y, ccText, 'right', { colour: cssVar('--muted'), alpha: HUD_TEXT_ALPHA });
+          }
         }
 
-        // speed
-        {
-          const s2 = uiScalePx();
-          const padX = Math.round(10 * s2 * dpr);
-          const padY = Math.round(6 * s2 * dpr);
-          const fontPx = Math.round((12 * s2) * dpr);
-          const { w: pillW, h: pillH } = pillMetrics(t2, fontPx, padX, padY);
-          const y = hudY + Math.round(28 * s * dpr);
-          const x = w - mX - pillW;
-          drawPillAt(x, y, pillW, pillH, 0.22, 0.30);
-          ctx.save();
-          ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
-          ctx.textBaseline = 'middle';
-          ctx.textAlign = 'left';
-          ctx.globalAlpha = 0.80;
-          ctx.fillStyle = cssVar('--muted');
-          ctx.fillText(t2, x + padX, y + Math.round(pillH * 0.5));
-          ctx.restore();
+        // Time / Speed only during play (typical arcade behaviour)
+        if (world.started && !world.over) {
+          if (HUD_SHOW_TIME) {
+            if (HUD_STYLE === 'text') {
+              y += drawHudLabelRight(xRight, y, t1, { colour: cssVar('--muted'), alpha: HUD_MUTED_ALPHA });
+            } else {
+              y += drawHudContainer(xRight, y, t1, 'right', { colour: cssVar('--muted'), alpha: HUD_MUTED_ALPHA });
+            }
+          }
+
+          if (HUD_SHOW_SPEED) {
+            if (HUD_STYLE === 'text') {
+              y += drawHudLabelRight(xRight, y, t2, { colour: cssVar('--muted'), alpha: HUD_MUTED_ALPHA });
+            } else {
+              y += drawHudContainer(xRight, y, t2, 'right', { colour: cssVar('--muted'), alpha: HUD_MUTED_ALPHA });
+            }
+          }
         }
       }
 
