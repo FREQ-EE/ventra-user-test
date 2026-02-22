@@ -1372,7 +1372,7 @@
     const PULSE_VU_H_PX = 64;         // per stack (CSS px)
     const PULSE_VU_STACK_GAP_PX = 14; // gap between stacks (CSS px)
     const PULSE_VU_SEG_GAP_PX = 4;    // gap between segments (CSS px)
-    const PULSE_VU_RADIUS_PX = 6;     // segment corner radius (CSS px)
+    const PULSE_VU_RADIUS_PX = 1;     // segment corner radius (CSS px)
 
     // How quickly the live fill responds/decays (fast empty feel).
     const PULSE_VU_RISE_TAU_S  = 0.040;
@@ -1385,6 +1385,17 @@
 
     const PULSE_VU_FILL_TAU_S = 0.060;  // how fast the current stack fills once a pulse is detected
     const PULSE_VU_DUMP_TAU_S = 0.070;  // how fast it empties when window expires
+    
+    // ============================================================
+    // Title-screen layout (monkey + VU stacks on one row)
+    // ============================================================
+    const TITLE_ROW_Y_FRAC        = 0.475; // shared vertical centre for monkey + stacks
+    const TITLE_MONKEY_X_FRAC     = 0.40;  // monkey centre x (left)
+    const TITLE_STACKS_X_FRAC     = 0.58;  // stacks centre x (right)
+
+    // Monkey idle bob (title screen only)
+    const TITLE_MONKEY_BOB_AMP_PX = 10;    // amplitude in CSS px
+    const TITLE_MONKEY_BOB_HZ     = 0.35;  // cycles per second
 
     // Derived from CC2 while on the start screen
     let pulseVuLevel = 0; // 0..1
@@ -2292,9 +2303,9 @@
       world.restScale = 1;
       world.restUiAlpha = 0;
 
-      // Start screen: monkey waits centred.
-      player.x = Math.round(w * 0.50);
-      player.y = Math.round(h * 0.54);
+      // Start screen: monkey waits left of stacks.
+      player.x = Math.round(w * TITLE_MONKEY_X_FRAC);
+      player.y = Math.round(h * TITLE_ROW_Y_FRAC);
       player.vy = 0;
       player.tilt = 0;
 
@@ -2352,8 +2363,8 @@
       world.restUiAlpha = 0;
 
       const { w, h } = resizeCanvasToDisplaySize();
-      player.x = Math.round(w * 0.50);
-      player.y = Math.round(h * 0.54);
+      player.x = Math.round(w * TITLE_MONKEY_X_FRAC);
+      player.y = Math.round(h * TITLE_ROW_Y_FRAC);
       player.vy = 0;
       player.tilt = 0;
       tailVyFilt = 0;
@@ -2642,12 +2653,16 @@
 
         if (currentInput) {
           // 3-stack VU meter replacing “Pulses: X / 3”
-          drawPulseVuStacks(Math.round(w * 0.5), Math.round(h * 0.420), {
-            stacks: 3,
-            segs: 7,
-            stackWpx: PULSE_VU_W_PX,
-            stackHpx: PULSE_VU_H_PX
-          });
+          drawPulseVuStacks(
+            Math.round(w * TITLE_STACKS_X_FRAC),
+            Math.round(h * TITLE_ROW_Y_FRAC),
+            {
+              stacks: 3,
+              segs: 7,
+              stackWpx: PULSE_VU_W_PX,
+              stackHpx: PULSE_VU_H_PX
+            }
+          );
         } else {
           // Keep a simple waiting line when no MIDI
           ctx.save();
@@ -2686,12 +2701,16 @@
 
         if (currentInput) {
           // Same 3-stack VU meter used on the start screen
-          drawPulseVuStacks(Math.round(w * 0.5), Math.round(h * 0.46), {
-            stacks: 3,
-            segs: 7,
-            stackWpx: PULSE_VU_W_PX,
-            stackHpx: PULSE_VU_H_PX
-          });
+          drawPulseVuStacks(
+            Math.round(w * TITLE_STACKS_X_FRAC),
+            Math.round(h * TITLE_ROW_Y_FRAC),
+            {
+              stacks: 3,
+              segs: 7,
+              stackWpx: PULSE_VU_W_PX,
+              stackHpx: PULSE_VU_H_PX
+            }
+          );
         }
 
         ctx.restore();
@@ -3049,11 +3068,19 @@
         world.restScale = 1;
         world.restUiAlpha = 0;
 
-        if (!world.over) {
-          const cx = Math.round(w * 0.50);
-          const cy = Math.round(h * 0.54);
-          player.x = expApproach(player.x, cx, dt, 0.12);
-          player.y = expApproach(player.y, cy, dt, 0.12);
+        // Title + Game Over: monkey sits left of the VU stacks, gently bobbing.
+        {
+          const targetX = Math.round(w * TITLE_MONKEY_X_FRAC);
+
+          const baseY = Math.round(h * TITLE_ROW_Y_FRAC);
+          const omega = Math.PI * 2 * TITLE_MONKEY_BOB_HZ;
+          const bob = Math.sin(nowS * omega) * (TITLE_MONKEY_BOB_AMP_PX * dpr);
+
+          const targetY = Math.round(baseY + bob);
+
+          // Smooth approach so it feels alive rather than “locked”.
+          player.x = expApproach(player.x, targetX, dt, 0.12);
+          player.y = expApproach(player.y, targetY, dt, 0.16);
         }
       }
 
