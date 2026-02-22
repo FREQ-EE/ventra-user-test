@@ -105,11 +105,12 @@
     let playerId = null;          // uuid string
     let callsign = null;          // 'ABCDE'
     let personalBestMs = null;    // integer | null
-    let top5 = [];                // [{callsign, score_ms}, ...]
+    let Top10 = [];               // [{callsign, score_ms}, ...]
 
     let lastSubmitMs = null;      // prevents double-submit per gameOver
     let lastFetchAtS = -1;        // seconds
     const LEADERBOARD_REFRESH_S = 10.0;
+    const LEADERBOARD_LIMIT = 10;
 
     function ensureSupabase() {
       if (sb) return sb;
@@ -186,7 +187,7 @@
       personalBestMs = (data && data.length) ? (data[0].score_ms | 0) : null;
     }
 
-    async function fetchTop5() {
+    async function fetchTop10() {
       const client = ensureSupabase();
       if (!client) return;
 
@@ -194,13 +195,13 @@
         .from('leaderboard_runs')
         .select('callsign,score_ms')
         .order('score_ms', { ascending: false })
-        .limit(5);
+        .limit(LEADERBOARD_LIMIT);
 
       if (error) {
-        console.warn('Top5 fetch failed:', error);
+        console.warn('Top10 fetch failed:', error);
         return;
       }
-      top5 = Array.isArray(data) ? data : [];
+      Top10 = Array.isArray(data) ? data : [];
     }
 
     async function refreshLeaderboardIfStale(tsSeconds) {
@@ -210,7 +211,7 @@
 
       // Fire both in parallel
       try {
-        await Promise.all([fetchPersonalBest(), fetchTop5()]);
+        await Promise.all([fetchPersonalBest(), fetchTop10()]);
       } catch (e) {
         console.warn('Leaderboard refresh failed:', e);
       }
@@ -237,7 +238,7 @@
 
       // Update cached PB optimistically; then refresh from DB
       if (personalBestMs === null || scoreMs > personalBestMs) personalBestMs = scoreMs;
-      try { await fetchTop5(); } catch {}
+      try { await fetchTop10(); } catch {}
     }
 
     function openEditCallsignPrompt() {
@@ -1711,6 +1712,51 @@
       return { x, y, w, h };
     }
 
+    function drawLabelValuePill(x, y, label, value, opts = {}) {
+      const s = uiScalePx();
+      const padX = Math.round(10 * s * dpr);
+      const padY = Math.round(6 * s * dpr);
+      const fontPx = Math.round((12 * s) * dpr);
+
+      // Measure combined width (label + value) in the same font size.
+      ctx.save();
+      ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
+      const labelW = Math.ceil(ctx.measureText(label).width);
+      const valueW = Math.ceil(ctx.measureText(value).width);
+      ctx.restore();
+
+      const h = Math.round(fontPx + padY * 2);
+      const w = labelW + valueW + padX * 2;
+
+      // Background pill
+      drawPillAt(x, y, w, h, opts.alpha ?? 0.28, opts.borderAlpha ?? 0.40);
+
+      // Text: label muted, value highlighted
+      const colLabel = opts.labelColour ?? cssVar('--muted');
+      const colValue = opts.valueColour ?? cssVar('--accentB'); // highlight
+
+      ctx.save();
+      ctx.textBaseline = 'middle';
+      ctx.textAlign = 'left';
+
+      // Label
+      ctx.globalAlpha = opts.textAlpha ?? 0.92;
+      ctx.fillStyle = colLabel;
+      ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
+      const tx = x + padX;
+      const ty = y + Math.round(h * 0.5);
+      ctx.fillText(label, tx, ty);
+
+      // Value (bold + colour)
+      ctx.fillStyle = colValue;
+      ctx.font = `800 ${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
+      ctx.fillText(value, tx + labelW, ty);
+
+      ctx.restore();
+
+      return { x, y, w, h };
+    }
+
     function drawCircleButton(cx, cy, r, opts = {}) {
       ctx.save();
       ctx.globalAlpha = opts.alpha ?? 0.90;
@@ -1975,16 +2021,26 @@
     }
 
     function drawLeaderboardHud(w, h, yTop) {
-      // yTop: device-pixel y position to start drawing
       const s = uiScalePx();
-      const xLeft = Math.round(w * 0.10);
+
+      // Keep your existing anchors
+      const xLeft  = Math.round(w * 0.10);
       const xRight = Math.round(w * 0.90);
 
       const fontPx = Math.round((12 * s) * dpr);
       const lineH  = Math.round((16 * s) * dpr);
 
       const muted = cssVar('--muted');
-      const text  = cssVar('--text');
+
+      // Be robust to your current variable naming (Top10 vs top10)
+      const rows = (typeof Top10 !== 'undefined' && Array.isArray(Top10))
+        ? Top10
+        : ((typeof top10 !== 'undefined' && Array.isArray(top10)) ? top10 : []);
+
+      const n = Math.min(LEADERBOARD_LIMIT, rows.length);
+
+      // Tight, controlled gap between columns
+      const COL_GAP = Math.round(12 * s * dpr);
 
       ctx.save();
       ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
@@ -1996,17 +2052,51 @@
       ctx.textAlign = 'left';
       ctx.fillText(`PB: ${formatScoreMs(personalBestMs)}`, xLeft, yTop);
 
-      // Top 5 (right)
-      ctx.textAlign = 'right';
-      ctx.fillText('TOP 5', xRight, yTop);
+      // Measure max widths to avoid giant empty space while keeping alignment stable
+      let maxLeftW = 0;
+      let maxScoreW = 0;
 
-      ctx.globalAlpha = 0.86;
-      for (let i = 0; i < Math.min(5, top5.length); i++) {
-        const row = top5[i];
+      for (let i = 0; i < n; i++) {
+        const row = rows[i] || {};
         const rank = String(i + 1).padStart(2, '0');
         const cs = String(row.callsign || '?????').toUpperCase();
-        const sc = formatScoreMs(row.score_ms | 0);
-        ctx.fillText(`${rank} ${cs}  ${sc}`, xRight, yTop + (i + 1) * lineH);
+        const leftText = `${rank}  ${cs}`;
+        const scoreText = formatScoreMs((row.score_ms | 0));
+
+        maxLeftW = Math.max(maxLeftW, Math.ceil(ctx.measureText(leftText).width));
+        maxScoreW = Math.max(maxScoreW, Math.ceil(ctx.measureText(scoreText).width));
+      }
+
+      // Block layout (anchored at xRight, not mid-screen)
+      const rightColX = xRight;
+      const leftColX  = Math.round(rightColX - maxScoreW - COL_GAP - maxLeftW);
+
+      // Header centred over the block
+      const blockLeft  = leftColX;
+      const blockRight = rightColX;
+      const blockCx    = Math.round((blockLeft + blockRight) * 0.5);
+
+      ctx.textAlign = 'center';
+      ctx.fillText(`TOP ${LEADERBOARD_LIMIT}`, blockCx, yTop);
+
+      // Rows
+      ctx.globalAlpha = 0.86;
+      ctx.fillStyle = muted;
+
+      for (let i = 0; i < n; i++) {
+        const row = rows[i] || {};
+        const rank = String(i + 1).padStart(2, '0');
+        const cs = String(row.callsign || '?????').toUpperCase();
+        const leftText = `${rank}  ${cs}`;
+        const scoreText = formatScoreMs((row.score_ms | 0));
+
+        const yy = yTop + (i + 1) * lineH;
+
+        ctx.textAlign = 'left';
+        ctx.fillText(leftText, leftColX, yy);
+
+        ctx.textAlign = 'right';
+        ctx.fillText(scoreText, rightColX, yy);
       }
 
       ctx.restore();
@@ -2470,16 +2560,6 @@
         }
       }
 
-      // Bottom controls: Back pill + Help circle + Speaker circle + Callsign pill
-      // Callsign pill (visible on start + game over; clickable to edit)
-      ui.callsignRect = null;
-      if (!world.started) {
-        const csText = `CALLSIGN ${callsign || '?????'}`;
-        const csY = by - Math.round(38 * s * dpr);
-        const cs = drawTextPill(mX, csY, csText, { colour: cssVar('--muted'), alpha: 0.28 });
-        ui.callsignRect = cs;
-      }
-
       // Leaderboard HUD (start + game over). Keep it near the top third.
       if (!world.started) {
         const yTop = Math.round(h * 0.36);
@@ -2488,6 +2568,25 @@
       // Back pill
       const back = drawTextPill(mX, by, 'Back', { colour: cssVar('--muted'), alpha: 0.28 });
       ui.backRect = back;
+
+      // CALLSIGN pill (same baseline as Back / Speaker / Help)
+      const CALLSIGN_GAP_PX = 12; // CSS px gap from Back pill
+      const callsignX = back.x + back.w + Math.round(CALLSIGN_GAP_PX * s * dpr);
+
+      // Use your existing callsign variable/state here.
+      // If your code stores it as something else (e.g. playerCallsign), replace `callsign` below accordingly.
+      const callsignLabel = 'CALLSIGN: ';
+      const callsignValue = String(callsign || '').toUpperCase();
+
+      // Draw and register hit-rect for editing
+      const csPill = drawLabelValuePill(callsignX, by, callsignLabel, callsignValue, {
+        alpha: 0.28,
+        borderAlpha: 0.40,
+        labelColour: cssVar('--muted'),
+        valueColour: cssVar('--accentB'),
+        textAlpha: 0.92
+      });
+      ui.callsignRect = csPill;
 
       // Help circle (right)
       const rBtn = Math.round(13 * s * dpr);
@@ -2678,7 +2777,7 @@
       const { w, h } = resizeCanvasToDisplaySize();
 
       nowS = ts * 0.001;
-      
+
       refreshLeaderboardIfStale(nowS);
 
       const dt = Math.min(0.033, Math.max(0.001, (ts - (lastTs || ts)) / 1000));
@@ -2988,7 +3087,7 @@
 
     // Initial fetch (non-blocking)
     (async () => {
-      try { await Promise.all([fetchPersonalBest(), fetchTop5()]); } catch {}
+      try { await Promise.all([fetchPersonalBest(), fetchTop10()]); } catch {}
     })();
 
     resetGame();
