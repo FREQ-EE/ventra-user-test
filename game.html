@@ -24,7 +24,7 @@
       --border:#262C3C;
 
       /* Rounded corner control (CSS px) */
-      --screen-radius-px: 0px;
+      --screen-radius-px: 70px;
     }
 
     html, body { height: 100%; }
@@ -746,14 +746,30 @@
       return { w, h };
     }
 
+    function clipViewToRounded(w, h) {
+      const r = Math.max(0, Math.round(SCREEN_CORNER_RADIUS_PX * dpr));
+      if (r <= 0) return false;
+
+      viewCtx.save();
+      viewCtx.setTransform(1, 0, 0, 1, 0, 0);
+      roundRectPath(viewCtx, 0, 0, w, h, r);
+      viewCtx.clip();
+      return true;
+    }
+
     // ============================================================
     // Barrel presentation (unchanged)
     // ============================================================
     function presentWithBarrel(w, h) {
+      // Always clear the full view first so pixels outside the clip cannot persist.
+      viewCtx.setTransform(1, 0, 0, 1, 0, 0);
+      viewCtx.clearRect(0, 0, w, h);
+
+      const didClip = clipViewToRounded(w, h);
+
       if (!BARREL_ENABLED || BARREL_K <= 0) {
-        viewCtx.setTransform(1, 0, 0, 1, 0, 0);
-        viewCtx.clearRect(0, 0, w, h);
         viewCtx.drawImage(renderCanvas, 0, 0);
+        if (didClip) viewCtx.restore();
         return;
       }
 
@@ -791,9 +807,6 @@
         dctx.restore();
       }
 
-      viewCtx.setTransform(1, 0, 0, 1, 0, 0);
-      viewCtx.clearRect(0, 0, w, h);
-
       const dy = h / slices;
       for (let i = 0; i < slices; i++) {
         const y0 = i * dy;
@@ -816,6 +829,8 @@
         viewCtx.drawImage(distortCanvas, 0, 0);
         viewCtx.restore();
       }
+
+      if (didClip) viewCtx.restore();
     }
 
     // ============================================================
@@ -1142,8 +1157,41 @@
     let cc2 = 0;
     function setCC2(v) { cc2 = clamp(v | 0, 0, 127); }
 
-    const PULSE_THRESHOLD = 32;
-    const PULSE_WINDOW_S = 1.6;
+    const PULSE_THRESHOLD = 1;
+    const PULSE_WINDOW_S = 5.0;
+    const START_FILL_CC2 = 120;        // must reach this to “fill” a stack
+    const START_FULL_HOLD_S = 0.50;    // show 3 full stacks before starting
+
+    let startPulseActive = false;      // currently attempting to fill a stack
+    let startPulsePeak = 0;            // peak CC2 during current attempt
+    let startDelayT = 0;               // countdown once all 3 are filled
+
+    // ============================================================
+    // Start-screen pulse VU visualisation (visual-only; no logic changes)
+    // ============================================================
+    const PULSE_VU_STACKS = 3;
+    const PULSE_VU_SEGMENTS = 7;
+
+    const PULSE_VU_W_PX = 18;         // per stack (CSS px)
+    const PULSE_VU_H_PX = 64;         // per stack (CSS px)
+    const PULSE_VU_STACK_GAP_PX = 14; // gap between stacks (CSS px)
+    const PULSE_VU_SEG_GAP_PX = 4;    // gap between segments (CSS px)
+    const PULSE_VU_RADIUS_PX = 6;     // segment corner radius (CSS px)
+
+    // How quickly the live fill responds/decays (fast empty feel).
+    const PULSE_VU_RISE_TAU_S  = 0.040;
+    const PULSE_VU_FALL_TAU_S  = 0.090;
+
+    let pulseVuAnim = 0;         // 0..1 fill for the current stack
+    let pulseVuAnimActive = false;
+    let pulseVuAnimStack = 0;    // which stack is currently animating (0..2)
+    let pulseVuRearm = true;     // must drop below threshold before another visual fill can start
+
+    const PULSE_VU_FILL_TAU_S = 0.060;  // how fast the current stack fills once a pulse is detected
+    const PULSE_VU_DUMP_TAU_S = 0.070;  // how fast it empties when window expires
+
+    // Derived from CC2 while on the start screen
+    let pulseVuLevel = 0; // 0..1
 
     let prevCC2 = 0;
     let pulseCount = 0;
@@ -1153,6 +1201,10 @@
       pulseCount = 0;
       pulseWindowT = 0;
       prevCC2 = cc2;
+
+      startPulseActive = false;
+      startPulsePeak = 0;
+      startDelayT = 0;
     }
 
     function registerPulse(dt) {
@@ -1161,28 +1213,59 @@
         return;
       }
 
-      const rising = (prevCC2 < PULSE_THRESHOLD) && (cc2 >= PULSE_THRESHOLD);
-      prevCC2 = cc2;
-
-      if (pulseWindowT > 0) {
+      // Once we have 3 filled, we only wait for the delay timer (no further counting).
+      if (startDelayT > 0) {
         pulseWindowT = Math.max(0, pulseWindowT - dt);
-        if (pulseWindowT === 0) pulseCount = 0;
+        return;
       }
 
-      if (rising) {
+      const rising = (prevCC2 < PULSE_THRESHOLD) && (cc2 >= PULSE_THRESHOLD);
+      const falling = (prevCC2 >= PULSE_THRESHOLD) && (cc2 < PULSE_THRESHOLD);
+      prevCC2 = cc2;
+
+      // Global hold window for the whole 3-stack sequence.
+      if (pulseWindowT > 0) {
+        pulseWindowT = Math.max(0, pulseWindowT - dt);
         if (pulseWindowT === 0) {
+          // Timed out -> dump progress
+          resetPulses();
+          return;
+        }
+      }
+
+      // Start an attempt on the first rising edge (or any rising edge after a completed stack).
+      if (rising) {
+        if (pulseCount === 0 && pulseWindowT === 0) {
           pulseWindowT = PULSE_WINDOW_S;
-          pulseCount = 1;
-        } else {
-          pulseCount += 1;
+        }
+        startPulseActive = true;
+        startPulsePeak = cc2;
+      }
+
+      // Track peak while active (this is what determines “fill” strength).
+      if (startPulseActive) {
+        startPulsePeak = Math.max(startPulsePeak, cc2);
+      }
+
+      // On breath release, decide whether that attempt filled the stack.
+      if (falling && startPulseActive) {
+        const strong = startPulsePeak >= START_FILL_CC2;
+
+        startPulseActive = false;
+        startPulsePeak = 0;
+
+        if (!strong) {
+          // Failed to reach 120 -> dump progress immediately (fast empty behaviour).
+          resetPulses();
+          return;
         }
 
-        if (pulseCount >= 3) {
-          pulseCount = 0;
-          pulseWindowT = 0;
+        // Successful strong pulse -> advance one stack.
+        pulseCount = clamp(pulseCount + 1, 0, 3);
 
-          if (!world.started && !world.over) startGame();
-          else if (world.over) startGame();
+        if (pulseCount >= 3) {
+          // Show all 3 full stacks briefly, then start.
+          startDelayT = START_FULL_HOLD_S;
         }
       }
     }
@@ -1297,12 +1380,13 @@
 
     function clipSceneToScreen(w, h) {
       const r = Math.max(0, Math.round(SCREEN_CORNER_RADIUS_PX * dpr));
-      if (r <= 0) return;
+      if (r <= 0) return false;
 
       ctx.save();
-      ctx.setTransform(1, 0, 0, 1, 0, 0); // ensure clip path is in canvas pixel space
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       roundRectPath(ctx, 0, 0, w, h, r);
       ctx.clip();
+      return true;
     }
 
     function drawPillAt(x, y, w, h, fillAlpha = 0.28, borderAlpha = 0.40) {
@@ -1526,6 +1610,172 @@
       ctx.fillText(text, x, y);
 
       ctx.restore();
+    }
+
+    function drawNeonRoundRectStroke(x, y, w, h, rCss, alphaScale = 1.0) {
+      // A small, cheap “monkey-like” aberration outline (aqua aura + RGB offsets + base).
+      const r = Math.max(0, rCss * dpr);
+      const lwBase = Math.max(1, Math.round(1.35 * dpr));
+      const lwGlow = Math.max(1, Math.round(1.10 * dpr));
+
+      const layers = [
+        { colour: MONKEY_AQUA_COLOUR, blurCss: 6.5,  dx: 0,            dy: 0,            lw: lwGlow, mode: 'hard-light', alpha: 0.30 },
+        { colour: MONKEY_BLUE_COLOUR, blurCss: 1.4,  dx: 2.0 * dpr,    dy: 0.0 * dpr,    lw: lwGlow, mode: 'source-over', alpha: 0.70 },
+        { colour: MONKEY_RED_COLOUR,  blurCss: 1.4,  dx: -2.0 * dpr,   dy: 0.0 * dpr,    lw: lwGlow, mode: 'source-over', alpha: 0.70 },
+        { colour: MONKEY_GOLD_COLOUR, blurCss: 1.0,  dx: 0.0 * dpr,    dy: 2.0 * dpr,    lw: lwGlow, mode: 'source-over', alpha: 0.65 },
+        { colour: MONKEY_BASE_COLOUR, blurCss: 0.0,  dx: 0.0 * dpr,    dy: 0.0 * dpr,    lw: lwBase, mode: 'source-over', alpha: 0.55 },
+      ];
+
+      for (const L of layers) {
+        ctx.save();
+        ctx.translate(L.dx, L.dy);
+        ctx.filter = (L.blurCss > 0) ? `blur(${(L.blurCss * dpr).toFixed(4)}px)` : 'none';
+        ctx.globalCompositeOperation = (L.mode === 'hard-light') ? 'hard-light' : 'source-over';
+        ctx.globalAlpha = clamp(L.alpha * alphaScale, 0, 1);
+        ctx.strokeStyle = L.colour;
+        ctx.lineWidth = L.lw;
+        roundRectPath(ctx, x, y, w, h, r);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      ctx.globalAlpha = 1;
+      ctx.filter = 'none';
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
+    function hexToRgb01(hex) {
+      const h = String(hex).trim().replace('#', '');
+      const v = (h.length === 3)
+        ? h.split('').map(ch => ch + ch).join('')
+        : h;
+      const n = parseInt(v, 16);
+      const r = ((n >> 16) & 255) / 255;
+      const g = ((n >> 8) & 255) / 255;
+      const b = (n & 255) / 255;
+      return { r, g, b };
+    }
+
+    function rgb01ToHex({ r, g, b }) {
+      const R = clamp(Math.round(r * 255), 0, 255);
+      const G = clamp(Math.round(g * 255), 0, 255);
+      const B = clamp(Math.round(b * 255), 0, 255);
+      return `#${R.toString(16).padStart(2,'0')}${G.toString(16).padStart(2,'0')}${B.toString(16).padStart(2,'0')}`;
+    }
+
+    function lerp(a, b, t) { return a + (b - a) * t; }
+
+    function lerpHex(aHex, bHex, t) {
+      const a = hexToRgb01(aHex);
+      const b = hexToRgb01(bHex);
+      return rgb01ToHex({
+        r: lerp(a.r, b.r, t),
+        g: lerp(a.g, b.g, t),
+        b: lerp(a.b, b.b, t)
+      });
+    }
+
+    function drawPulseVuStacks(cx, cy, opts = {}) {
+      // Centre point anchor, draw 3 stacks of 7 rounded segments.
+      const stacks = opts.stacks ?? PULSE_VU_STACKS;
+      const segs   = opts.segs   ?? PULSE_VU_SEGMENTS;
+
+      const stackW = Math.round((opts.stackWpx ?? PULSE_VU_W_PX) * dpr);
+      const stackH = Math.round((opts.stackHpx ?? PULSE_VU_H_PX) * dpr);
+      const gapX   = Math.round((opts.stackGapPx ?? PULSE_VU_STACK_GAP_PX) * dpr);
+      const segGap = Math.round((opts.segGapPx ?? PULSE_VU_SEG_GAP_PX) * dpr);
+      const rCss   = (opts.radiusPx ?? PULSE_VU_RADIUS_PX);
+
+      const totalW = stacks * stackW + (stacks - 1) * gapX;
+      const leftX = Math.round(cx - totalW * 0.5);
+      const topY  = Math.round(cy - stackH * 0.5);
+
+      // Completed pulses are “locked” (full stacks) while pulseWindowT > 0.
+      const completed = clamp(pulseCount, 0, stacks); // 0..2 normally
+      const activeIdx = clamp(completed, 0, stacks - 1);
+
+      const accentA = cssVar('--accentA');
+      const accentB = cssVar('--accentB');
+      const muted   = cssVar('--muted');
+
+      for (let si = 0; si < stacks; si++) {
+        const x0 = leftX + si * (stackW + gapX);
+
+        let fillFrac = 0;
+
+        if (pulseCount >= stacks) {
+          fillFrac = 1;
+        } else if (pulseWindowT > 0) {
+          if (si < pulseCount) {
+            fillFrac = 1; // completed stacks
+          } else if (si === pulseCount) {
+            // current stack being filled: show live progress as peak/120
+            if (startDelayT > 0) {
+              fillFrac = 1; // during final hold, show fully filled
+            } else if (startPulseActive) {
+              fillFrac = clamp(startPulsePeak / Math.max(1, START_FILL_CC2), 0, 1);
+            } else {
+              fillFrac = 0;
+            }
+          } else {
+            fillFrac = 0;
+          }
+        } else {
+          fillFrac = 0;
+        }
+
+        const filledSegs = clamp(Math.round(fillFrac * segs), 0, segs);
+
+        // Segment geometry (bottom-up fill).
+        const segH = Math.floor((stackH - (segs - 1) * segGap) / segs);
+        const usedH = segH * segs + segGap * (segs - 1);
+        const yBase = topY + Math.round((stackH - usedH) * 0.5);
+
+        for (let j = 0; j < segs; j++) {
+          const y = yBase + (segs - 1 - j) * (segH + segGap); // bottom segment is j=0
+          const isLit = (j < filledSegs);
+
+          // Fill (lit)
+          if (isLit) {
+            // Vertical colour progression: bottom = accentA (purple), top = accentB (pink)
+            const tSeg = (segs <= 1) ? 1 : (j / (segs - 1)); // j: 0(bottom) .. segs-1(top)
+            // Optional bias so pink concentrates nearer the top:
+            const tBiased = Math.pow(tSeg, 1.35);
+
+            const col = lerpHex(accentA, accentB, tBiased);
+
+            ctx.save();
+            ctx.globalAlpha = 0.90;
+            ctx.fillStyle = col;
+            roundRectPath(ctx, x0, y, stackW, segH, Math.round(rCss * dpr));
+            ctx.fill();
+
+            // subtle glow lift
+            ctx.globalAlpha = 0.22;
+            ctx.shadowColor = col;
+            ctx.shadowBlur = Math.round(10 * dpr);
+            roundRectPath(ctx, x0, y, stackW, segH, Math.round(rCss * dpr));
+            ctx.fill();
+            ctx.restore();
+          }
+
+          // Outline (always, with neon-ish aberration)
+          // Slightly dim empty segments.
+          const a = isLit ? 1.0 : 0.35;
+          drawNeonRoundRectStroke(x0, y, stackW, segH, rCss, a);
+
+          // Optional faint interior stroke for empty segments to read better
+          if (!isLit) {
+            ctx.save();
+            ctx.globalAlpha = 0.25;
+            ctx.strokeStyle = muted;
+            ctx.lineWidth = Math.max(1, Math.round(0.8 * dpr));
+            roundRectPath(ctx, x0 + 0.5 * dpr, y + 0.5 * dpr, stackW - 1 * dpr, segH - 1 * dpr, Math.round((rCss - 1) * dpr));
+            ctx.stroke();
+            ctx.restore();
+          }
+        }
+      }
     }
 
     function drawHelpOverlay(w, h) {
@@ -1804,8 +2054,7 @@
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.clearRect(0, 0, w, h);
 
-      // Apply screen rounding in SCENE space (pre-barrel)
-      clipSceneToScreen(w, h);
+      const didClipScene = clipSceneToScreen(w, h);
 
       const border = cssVar('--border');
       const accentA = cssVar('--accentA');
@@ -2013,10 +2262,6 @@
           ? 'Start with three breath pulses'
           : 'Plug in Ventra, refresh, then start';
 
-        const prog = currentInput
-          ? `Pulses: ${String(pulseCount).padStart(1, '0')} / 3`
-          : 'Waiting for MIDI device…';
-
         ctx.save();
         const tPx = Math.round((12 * s) * dpr);
         ctx.font = `${tPx}px "JetBrains Mono", ui-monospace, monospace`;
@@ -2025,8 +2270,27 @@
         ctx.textBaseline = 'middle';
         ctx.globalAlpha = 0.92;
         ctx.fillText(msg, Math.round(w * 0.5), Math.round(h * 0.34));
-        ctx.globalAlpha = 0.75;
-        ctx.fillText(prog, Math.round(w * 0.5), Math.round(h * 0.38));
+        ctx.restore();
+
+        if (currentInput) {
+          // 3-stack VU meter replacing “Pulses: X / 3”
+          drawPulseVuStacks(Math.round(w * 0.5), Math.round(h * 0.420), {
+            stacks: 3,
+            segs: 7,
+            stackWpx: PULSE_VU_W_PX,
+            stackHpx: PULSE_VU_H_PX
+          });
+        } else {
+          // Keep a simple waiting line when no MIDI
+          ctx.save();
+          ctx.font = `${tPx}px "JetBrains Mono", ui-monospace, monospace`;
+          ctx.fillStyle = muted;
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.globalAlpha = 0.75;
+          ctx.fillText('Waiting for MIDI device…', Math.round(w * 0.5), Math.round(h * 0.385));
+          ctx.restore();
+        }
         ctx.restore();
       }
 
@@ -2046,7 +2310,23 @@
         ctx.fillStyle = muted;
         ctx.globalAlpha = 0.88;
         ctx.fillText(`Survived: ${world.survive.toFixed(1)} s`, Math.round(w * 0.5), Math.round(h * 0.34));
-        ctx.fillText('Restart with three breath pulses', Math.round(w * 0.5), Math.round(h * 0.38));
+
+        const msg = currentInput
+          ? 'Restart with three breath pulses'
+          : 'Plug in Ventra, refresh, then restart';
+
+        ctx.fillText(msg, Math.round(w * 0.5), Math.round(h * 0.38));
+
+        if (currentInput) {
+          // Same 3-stack VU meter used on the start screen
+          drawPulseVuStacks(Math.round(w * 0.5), Math.round(h * 0.46), {
+            stacks: 3,
+            segs: 7,
+            stackWpx: PULSE_VU_W_PX,
+            stackHpx: PULSE_VU_H_PX
+          });
+        }
+
         ctx.restore();
       }
 
@@ -2118,8 +2398,7 @@
         drawEllipseDebug(cx, cy, a, b, theta);
       }
 
-      // If we clipped, we must restore once at the end
-      if (SCREEN_CORNER_RADIUS_PX > 0) ctx.restore();
+      if (didClipScene) ctx.restore();
     }
 
     // ============================================================
@@ -2161,6 +2440,35 @@
       }
 
       registerPulse(dt);
+
+      // After 3 strong pulses: show 3 full stacks, then start (also works from GAME OVER).
+      if (!world.started && startDelayT > 0) {
+        startDelayT = Math.max(0, startDelayT - dt);
+        if (startDelayT === 0) {
+          startGame(); // startGame() will resetGame() if world.over
+        }
+      }
+
+      // Pulse VU animation (visual-only; runs on START and GAME OVER screens)
+      if (!world.started && currentInput) {
+        if (pulseWindowT > 0) {
+          if (pulseVuAnimActive) {
+            pulseVuAnim = expApproach(pulseVuAnim, 1, dt, PULSE_VU_FILL_TAU_S);
+            if (pulseVuAnim > 0.999) {
+              pulseVuAnim = 1;
+              pulseVuAnimActive = false;
+            }
+          } else {
+            pulseVuAnim = expApproach(pulseVuAnim, pulseVuAnim, dt, 0.2);
+          }
+        } else {
+          pulseVuAnim = expApproach(pulseVuAnim, 0, dt, PULSE_VU_DUMP_TAU_S);
+          pulseVuAnimActive = false;
+        }
+      } else {
+        pulseVuAnim = expApproach(pulseVuAnim, 0, dt, 0.10);
+        pulseVuAnimActive = false;
+      }
 
       const groundY = computeGroundY(w, h);
       const ceilingY = world.topPad;
@@ -2402,6 +2710,8 @@
     // ============================================================
     // Boot
     // ============================================================
+    // Ensure CSS rounding is applied immediately (before first frame)
+    document.documentElement.style.setProperty('--screen-radius-px', `${SCREEN_CORNER_RADIUS_PX}px`);
     resetGame();
     setCC2(0);
     requestAnimationFrame(step);
