@@ -47,9 +47,12 @@
       max-height: 95vh;
       background:#000;
 
-      /* Rounded corners (clips the canvas) */
       border-radius: var(--screen-radius-px);
       overflow:hidden;
+
+      /* Hard, first-paint-safe clipping (prevents square-corner flash) */
+      -webkit-clip-path: inset(0 round var(--screen-radius-px));
+      clip-path: inset(0 round var(--screen-radius-px));
     }
 
     canvas{
@@ -62,8 +65,11 @@
       -webkit-user-select:none;
       touch-action:manipulation;
 
-      /* Keep canvas edges aligned with shell rounding */
-      border-radius: var(--screen-radius-px);
+      border-radius: inherit;
+
+      /* Optional: enforce clip on the canvas too */
+      -webkit-clip-path: inset(0 round var(--screen-radius-px));
+      clip-path: inset(0 round var(--screen-radius-px));
     }
   </style>
 </head>
@@ -757,19 +763,36 @@
       return true;
     }
 
+    function applyViewRoundedMask(w, h) {
+      const r = Math.max(0, Math.round(SCREEN_CORNER_RADIUS_PX * dpr));
+      if (r <= 0) return;
+
+      viewCtx.save();
+      viewCtx.setTransform(1, 0, 0, 1, 0, 0);
+
+      // Keep only pixels inside the rounded rect.
+      viewCtx.globalCompositeOperation = 'destination-in';
+      viewCtx.fillStyle = 'rgba(255,255,255,1)';
+      roundRectPath(viewCtx, 0, 0, w, h, r);
+      viewCtx.fill();
+
+      viewCtx.restore();
+
+      // Restore defaults for safety.
+      viewCtx.globalCompositeOperation = 'source-over';
+    }
+
     // ============================================================
     // Barrel presentation (unchanged)
     // ============================================================
     function presentWithBarrel(w, h) {
-      // Always clear the full view first so pixels outside the clip cannot persist.
+      // Always clear the full view first so pixels outside the mask cannot persist.
       viewCtx.setTransform(1, 0, 0, 1, 0, 0);
       viewCtx.clearRect(0, 0, w, h);
 
-      const didClip = clipViewToRounded(w, h);
-
       if (!BARREL_ENABLED || BARREL_K <= 0) {
         viewCtx.drawImage(renderCanvas, 0, 0);
-        if (didClip) viewCtx.restore();
+        applyViewRoundedMask(w, h);
         return;
       }
 
@@ -781,6 +804,7 @@
       const invCx = 1 / Math.max(1e-6, cx);
       const invCy = 1 / Math.max(1e-6, cy);
 
+      // First pass into distortCanvas
       dctx.setTransform(1, 0, 0, 1, 0, 0);
       dctx.clearRect(0, 0, w, h);
 
@@ -807,6 +831,7 @@
         dctx.restore();
       }
 
+      // Second pass into view canvas
       const dy = h / slices;
       for (let i = 0; i < slices; i++) {
         const y0 = i * dy;
@@ -830,7 +855,8 @@
         viewCtx.restore();
       }
 
-      if (didClip) viewCtx.restore();
+      // Hard mask last (authoritative)
+      applyViewRoundedMask(w, h);
     }
 
     // ============================================================
@@ -2291,7 +2317,6 @@
           ctx.fillText('Waiting for MIDI device…', Math.round(w * 0.5), Math.round(h * 0.385));
           ctx.restore();
         }
-        ctx.restore();
       }
 
       // Game-over overlay
