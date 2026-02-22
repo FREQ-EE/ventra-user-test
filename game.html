@@ -1546,6 +1546,31 @@
     const HUD_BORDER_ALPHA   = 0.35;  // outline
 
     // ============================================================
+    // UI text CRT/aberration (applies to HUD, pills, leaderboard, help)
+    // ============================================================
+    const UI_TEXT_FX_ENABLED = true;     // master toggle (set false for A/B testing)
+    const UI_TEXT_FX_INTENSITY = 1;    // 0..2 typical (scales offsets/blur/alphas)
+    // Per-element overrides
+    const UI_TEXT_FX_INTENSITY_CALLSIGN = 0.5;  // 0 = no FX, 1 = normal
+    const UI_TEXT_FX_INTENSITY_VENTRA_LOGO = 1.5;  // stronger than normal
+
+    // Offsets are in CSS px (scaled by dpr at draw time)
+    const UI_TEXT_FX_RED_X_PX   = -1.4;  // red channel x-offset
+    const UI_TEXT_FX_BLUE_X_PX  =  1.4;  // blue channel x-offset
+    const UI_TEXT_FX_GOLD_Y_PX  =  1.0;  // warm “phosphor” y-offset
+
+    const UI_TEXT_FX_BLUR_PX    =  0.55; // subtle blur for colour fringing (CSS px)
+    const UI_TEXT_FX_ALPHA_RGB  =  0.55; // alpha for red/blue passes (0..1)
+    const UI_TEXT_FX_ALPHA_GOLD =  0.35; // alpha for gold pass (0..1)
+
+    // If true, the base (main) text is also slightly softened (usually keep false).
+    const UI_TEXT_FX_SOFTEN_BASE = false;
+    const UI_TEXT_FX_BASE_BLUR_PX = 0.25; // only used if UI_TEXT_FX_SOFTEN_BASE = true
+
+    // Composite for the colour passes. 'source-over' is safest; 'screen' is stronger.
+    const UI_TEXT_FX_COMPOSITE = 'source-over';
+
+    // ============================================================
     // On-CRT UI drawing helpers
     // ============================================================
     const UI_BOTTOM_BAND_PX = 56; // CSS px reserved for bottom controls
@@ -1629,9 +1654,13 @@
       ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
       ctx.textBaseline = 'top';
       ctx.textAlign = 'right';
-      ctx.globalAlpha = opts.alpha ?? HUD_TEXT_ALPHA;
-      ctx.fillStyle = opts.colour ?? cssVar('--muted');
-      ctx.fillText(text, xRight, y);
+      uiFillText(
+        text,
+        xRight,
+        y,
+        (opts.colour ?? cssVar('--muted')),
+        (opts.alpha ?? HUD_TEXT_ALPHA)
+      );
       ctx.restore();
 
       return Math.round(fontPx + HUD_LINE_GAP_PX * s * dpr);
@@ -1645,9 +1674,13 @@
       ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
       ctx.textBaseline = 'top';
       ctx.textAlign = 'left';
-      ctx.globalAlpha = opts.alpha ?? HUD_TEXT_ALPHA;
-      ctx.fillStyle = opts.colour ?? cssVar('--muted');
-      ctx.fillText(text, xLeft, y);
+      uiFillText(
+        text,
+        xLeft,
+        y,
+        (opts.colour ?? cssVar('--muted')),
+        (opts.alpha ?? HUD_TEXT_ALPHA)
+      );
       ctx.restore();
 
       return Math.round(fontPx + HUD_LINE_GAP_PX * s * dpr);
@@ -1696,7 +1729,7 @@
 
       const tx = (align === 'right') ? x : (x0 + padX);
       const ty = y0 + padY;
-      ctx.fillText(text, tx, ty);
+      uiFillText(text, tx, ty, (opts.colour ?? cssVar('--muted')), (opts.alpha ?? HUD_TEXT_ALPHA));
       ctx.restore();
 
       return Math.round(bh + HUD_LINE_GAP_PX * s * dpr);
@@ -1717,7 +1750,7 @@
       ctx.textAlign = 'left';
       ctx.globalAlpha = opts.textAlpha ?? 0.90;
       ctx.fillStyle = opts.colour ?? cssVar('--muted');
-      ctx.fillText(text, x + padX, y + Math.round(h * 0.5));
+      uiFillText(text, x + padX, y + Math.round(h * 0.5), (opts.colour ?? cssVar('--muted')), (opts.textAlpha ?? 0.90));
       ctx.restore();
 
       return { x, y, w, h };
@@ -1756,12 +1789,19 @@
       ctx.font = `${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
       const tx = x + padX;
       const ty = y + Math.round(h * 0.5);
-      ctx.fillText(label, tx, ty);
+      uiFillText(label, tx, ty, colLabel, (opts.textAlpha ?? 0.92));
 
       // Value (bold + colour)
       ctx.fillStyle = colValue;
       ctx.font = `800 ${fontPx}px "JetBrains Mono", ui-monospace, monospace`;
-      ctx.fillText(value, tx + labelW, ty);
+      uiFillText(
+        value,
+        tx + labelW,
+        ty,
+        colValue,
+        (opts.textAlpha ?? 0.92),
+        UI_TEXT_FX_INTENSITY_CALLSIGN   // reduced FX only here
+      );
 
       ctx.restore();
 
@@ -1895,6 +1935,66 @@
       ctx.globalAlpha = 1;
       ctx.filter = 'none';
       ctx.globalCompositeOperation = 'source-over';
+    }
+
+    function uiFillText(text, x, y, colour, alpha = 1.0, intensityOverride = null) {
+      const a0 = alpha;
+      const baseIntensity = (intensityOverride !== null)
+        ? intensityOverride
+        : UI_TEXT_FX_INTENSITY;
+
+      if (!UI_TEXT_FX_ENABLED || baseIntensity <= 0) {
+        ctx.save();
+        ctx.globalAlpha = a0;
+        ctx.fillStyle = colour;
+        ctx.fillText(text, x, y);
+        ctx.restore();
+        return;
+      }
+
+      const k = baseIntensity;
+
+      const dxR = (UI_TEXT_FX_RED_X_PX  * k) * dpr;
+      const dxB = (UI_TEXT_FX_BLUE_X_PX * k) * dpr;
+      const dyG = (UI_TEXT_FX_GOLD_Y_PX * k) * dpr;
+
+      const blur = Math.max(0, UI_TEXT_FX_BLUR_PX * k) * dpr;
+
+      // Colour passes
+      ctx.save();
+      ctx.globalCompositeOperation = UI_TEXT_FX_COMPOSITE;
+
+      // Red
+      ctx.globalAlpha = a0 * clamp(UI_TEXT_FX_ALPHA_RGB * k, 0, 1);
+      ctx.fillStyle = MONKEY_RED_COLOUR;
+      ctx.filter = (blur > 0) ? `blur(${blur.toFixed(4)}px)` : 'none';
+      ctx.fillText(text, x + dxR, y);
+
+      // Blue
+      ctx.fillStyle = MONKEY_BLUE_COLOUR;
+      ctx.fillText(text, x + dxB, y);
+
+      // Gold (slight vertical phosphor smear)
+      ctx.globalAlpha = a0 * clamp(UI_TEXT_FX_ALPHA_GOLD * k, 0, 1);
+      ctx.fillStyle = MONKEY_GOLD_COLOUR;
+      ctx.fillText(text, x, y + dyG);
+
+      ctx.restore();
+
+      // Base pass (main readable text)
+      ctx.save();
+      ctx.globalAlpha = a0;
+      ctx.fillStyle = colour;
+
+      if (UI_TEXT_FX_SOFTEN_BASE) {
+        const b = Math.max(0, UI_TEXT_FX_BASE_BLUR_PX * k) * dpr;
+        ctx.filter = (b > 0) ? `blur(${b.toFixed(4)}px)` : 'none';
+      } else {
+        ctx.filter = 'none';
+      }
+
+      ctx.fillText(text, x, y);
+      ctx.restore();
     }
 
     function hexToRgb01(hex) {
@@ -2061,7 +2161,7 @@
       ctx.globalAlpha = 0.88;
       ctx.fillStyle = muted;
       ctx.textAlign = 'left';
-      ctx.fillText(`PB: ${formatScoreMs(personalBestMs)}`, xLeft, yTop);
+      uiFillText(`PB: ${formatScoreMs(personalBestMs)}`, xLeft, yTop, muted, 0.88);
 
       // Measure max widths to avoid giant empty space while keeping alignment stable
       let maxLeftW = 0;
@@ -2088,7 +2188,7 @@
       const blockCx    = Math.round((blockLeft + blockRight) * 0.5);
 
       ctx.textAlign = 'center';
-      ctx.fillText(`TOP ${LEADERBOARD_LIMIT}`, blockCx, yTop);
+      uiFillText(`TOP ${LEADERBOARD_LIMIT}`, blockCx, yTop, muted, 0.88);
 
       // Rows
       ctx.globalAlpha = 0.86;
@@ -2104,10 +2204,10 @@
         const yy = yTop + (i + 1) * lineH;
 
         ctx.textAlign = 'left';
-        ctx.fillText(leftText, leftColX, yy);
+        uiFillText(leftText, leftColX, yy, muted, 0.86);
 
         ctx.textAlign = 'right';
-        ctx.fillText(scoreText, rightColX, yy);
+        uiFillText(scoreText, rightColX, yy, muted, 0.86);
       }
 
       ctx.restore();
@@ -2166,7 +2266,7 @@
         ctx.textAlign = 'left';
         ctx.textBaseline = 'top';
         ctx.font = `${opts.weight ?? 400} ${opts.sizePx ?? bodyPx}px ${opts.family ?? '"JetBrains Mono", ui-monospace, monospace'}`;
-        ctx.fillText(text, x0, y0);
+        uiFillText(text, x0, y0, (opts.colour ?? colMuted), (opts.alpha ?? 0.92));
         ctx.restore();
         y0 += (opts.advance ?? lineH);
       }
@@ -2632,7 +2732,14 @@
         ctx.font = `900 ${smallPx}px Orbitron, system-ui, sans-serif`;
         ctx.globalAlpha = 0.70;
         ctx.fillStyle = muted;
-        ctx.fillText('VENTRA', Math.round(w * 0.5), Math.round(h * 0.205));
+        uiFillText(
+          'VENTRA',
+          Math.round(w * 0.5),
+          Math.round(h * 0.205),
+          muted,
+          0.70,
+          UI_TEXT_FX_INTENSITY_VENTRA_LOGO   // stronger FX only here
+        );
         ctx.restore();
 
         drawGradientTitle('EXHALE//ASCEND', Math.round(w * 0.5), Math.round(h * 0.26), bigPx);
@@ -2648,7 +2755,7 @@
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.globalAlpha = 0.92;
-        ctx.fillText(msg, Math.round(w * 0.5), Math.round(h * 0.34));
+        uiFillText(msg, Math.round(w * 0.5), Math.round(h * 0.34), muted, 0.92);
         ctx.restore();
 
         if (currentInput) {
@@ -2671,7 +2778,7 @@
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.globalAlpha = 0.75;
-          ctx.fillText('Waiting for MIDI device…', Math.round(w * 0.5), Math.round(h * 0.385));
+          uiFillText('Waiting for MIDI device…', Math.round(w * 0.5), Math.round(h * 0.385), muted, 0.75);
           ctx.restore();
         }
       }
@@ -2686,18 +2793,18 @@
         ctx.font = `900 ${Math.round(26 * s2 * dpr)}px Orbitron, system-ui, sans-serif`;
         ctx.fillStyle = text;
         ctx.globalAlpha = 0.92;
-        ctx.fillText('GAME OVER', Math.round(w * 0.5), Math.round(h * 0.26));
+        uiFillText('GAME OVER', Math.round(w * 0.5), Math.round(h * 0.26), text, 0.92);
 
         ctx.font = `${Math.round(12 * s2 * dpr)}px "JetBrains Mono", ui-monospace, monospace`;
         ctx.fillStyle = muted;
         ctx.globalAlpha = 0.88;
-        ctx.fillText(`Survived: ${world.survive.toFixed(1)} s`, Math.round(w * 0.5), Math.round(h * 0.34));
+        uiFillText(`Survived: ${world.survive.toFixed(1)} s`, Math.round(w * 0.5), Math.round(h * 0.34), muted, 0.88);
 
         const msg = currentInput
           ? 'Restart with three breath pulses'
           : 'Plug in Ventra, refresh, then restart';
 
-        ctx.fillText(msg, Math.round(w * 0.5), Math.round(h * 0.38));
+        uiFillText(msg, Math.round(w * 0.5), Math.round(h * 0.38), muted, 0.88);
 
         if (currentInput) {
           // Same 3-stack VU meter used on the start screen
