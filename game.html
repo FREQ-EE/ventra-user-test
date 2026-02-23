@@ -426,6 +426,104 @@
     // ============================================================
     // Assets
     // ============================================================
+
+    // ============================================================
+    // Background parallax (far + mid). Obstacles act as near layer.
+    // ============================================================
+
+    // Master toggles
+    const BG_FAR_ENABLED = true;
+    const BG_MID_ENABLED = true;
+
+    // Screen visibility toggles
+    const BG_SHOW_ON_TITLE = true;
+    const BG_SHOW_ON_GAME_OVER = true;
+
+    // FAR: single control that affects both how large it appears and how often it tiles.
+    // Higher = larger features + fewer repeats. Lower = smaller features + more repeats.
+    // Typical range: 0.60 .. 1.40
+    const BG_FAR_SCALE = 0.4;
+
+    // MID: fixed for now (can add a similar control later if desired)
+    const BG_MID_SCALE = 1.00;
+
+    // Per-screen alpha (so we can keep Title/GameOver quieter, and Play brighter)
+    const BG_FAR_ALPHA_PLAY     = 0.10;
+    const BG_FAR_ALPHA_TITLE    = 0.07;
+    const BG_FAR_ALPHA_GAMEOVER = 0.07;
+
+    const BG_MID_ALPHA_PLAY     = 0.09;
+    const BG_MID_ALPHA_TITLE    = 0.03;
+    const BG_MID_ALPHA_GAMEOVER = 0.03;
+
+    // Parallax factors (fraction of obstacle scroll speed)
+    const BG_FAR_PARALLAX = 0.18;
+    const BG_MID_PARALLAX = 0.35;
+
+    // If true, background motion pauses during breath breaks (recommended for coherence).
+    const BG_FREEZE_DURING_REST = true;
+
+    // If true, mid layer acts as an occluder for the far layer.
+    // Wherever mid has any non-zero source alpha, the far layer is removed fully,
+    // regardless of the mid layer's own draw alpha.
+    const BG_MID_OCCLUDES_FAR = true;
+
+    // Background images
+    const bgFarImg = new Image();
+    const bgMidImg = new Image();
+    let bgFarReady = false;
+    let bgMidReady = false;
+
+    bgFarImg.onload = () => { bgFarReady = true; };
+
+    // Build a binary alpha mask from the mid image (alpha > 0 => opaque mask).
+    // This lets mid "punch out" far regardless of mid's own draw alpha.
+    const bgMidMaskCanvas = document.createElement('canvas');
+    let bgMidMaskReady = false;
+
+    bgMidImg.onload = () => {
+      bgMidReady = true;
+
+      // Build mask once.
+      bgMidMaskCanvas.width = bgMidImg.width;
+      bgMidMaskCanvas.height = bgMidImg.height;
+
+      const mctx = bgMidMaskCanvas.getContext('2d', { willReadFrequently: true });
+      mctx.setTransform(1, 0, 0, 1, 0, 0);
+      mctx.clearRect(0, 0, bgMidMaskCanvas.width, bgMidMaskCanvas.height);
+
+      // Draw mid into mask canvas
+      mctx.drawImage(bgMidImg, 0, 0);
+
+      // Binarise alpha channel: any alpha>0 becomes fully opaque.
+      const img = mctx.getImageData(0, 0, bgMidMaskCanvas.width, bgMidMaskCanvas.height);
+      const data = img.data;
+
+      for (let i = 0; i < data.length; i += 4) {
+        const a = data[i + 3];
+        if (a > 0) {
+          data[i + 0] = 255; // colour irrelevant, but keep it defined
+          data[i + 1] = 255;
+          data[i + 2] = 255;
+          data[i + 3] = 255; // fully opaque mask
+        } else {
+          data[i + 3] = 0;   // transparent
+        }
+      }
+
+      mctx.putImageData(img, 0, 0);
+      bgMidMaskReady = true;
+    };
+
+    bgFarImg.onerror = (e) => { console.warn('Failed to load bg_far.png', e); };
+    bgMidImg.onerror = (e) => { console.warn('Failed to load bg_mid.png', e); };
+
+    bgFarImg.src = './bg_far_01.png';
+    bgMidImg.src = './bg_mid_01.png';
+
+    // Scroll offsets in *scene pixels* (device pixels, same space as renderCanvas).
+    const bg = { farX: 0, midX: 0 };
+
     const monkeyImg = new Image();
     let monkeyReady = false;
     monkeyImg.onload = () => { monkeyReady = true; };
@@ -508,7 +606,7 @@
 
     // After each rest cycle completes, reduce the ramp time slightly (seconds).
     // This lowers targetSpeed after a pause without resetting difficulty.
-    const POST_REST_PLAYT_REWIND_S = 1.75; // try 0.5..2.5
+    const POST_REST_PLAYT_REWIND_S = 1.6; // try 0.5..2.5
 
     // ============================================================
     // MIDI
@@ -918,6 +1016,9 @@
         distortCanvas.width = w;
         distortCanvas.height = h;
       }
+
+      // Patterns are bound to the current ctx; if canvas size changes, safely drop caches.
+      _bgPatternCache.clear?.(); // if WeakMap.clear not supported, ignore
 
       return { w, h };
     }
@@ -1432,9 +1533,8 @@
 
       // Global hold window for the whole 3-stack sequence.
       if (pulseWindowT > 0) {
-        pulseWindowT = Math.max(0, pulseWindowT - dt);
-        if (pulseWindowT === 0) {
-          // Timed out -> dump progress
+        pulseWindowT -= dt;
+        if (pulseWindowT <= 0) {
           resetPulses();
           return;
         }
@@ -2440,6 +2540,11 @@
       resetPulses();
       stopMusic();
 
+      // Clear obstacles on game over so the screen shows only background + UI layers.
+      world.obstacles = [];
+      world.distAcc = 0;
+      world.nextSpawnDist = 620;
+
       // Auto-submit score (milliseconds). Prevent double-submit for same gameOver.
       const scoreMs = Math.max(0, Math.round(world.survive * 1000));
       if (lastSubmitMs !== scoreMs) {
@@ -2476,6 +2581,64 @@
     const GLASS_STRENGTH = 0.2;   // 0..2 (visual)
     const GLASS_VIGNETTE = 0.9;   // 0..1
     const GLASS_HIGHLIGHT = 2;  // 0..1
+
+    // ============================================================
+    // Background tiling helper (FAST): pattern fill instead of per-tile drawImage loops
+    // ============================================================
+    const _bgPatternCache = new WeakMap();
+
+    function _getBgPattern(source) {
+      // source can be HTMLImageElement or HTMLCanvasElement
+      let p = _bgPatternCache.get(source);
+      if (!p) {
+        p = ctx.createPattern(source, 'repeat');
+        _bgPatternCache.set(source, p);
+      }
+      return p;
+    }
+
+    function drawBgTiledLayer(source, ready, xOffPx, w, h, opts = {}) {
+      if (!ready || !source || source.width <= 0 || source.height <= 0) return;
+
+      const alpha = (opts.alpha ?? 0.12);
+      const scale = Math.max(0.01, (opts.scale ?? 1.0));
+      const yOffPx = (opts.yOffPx ?? 0);
+
+      const iw = source.width;
+      const ih = source.height;
+
+      // Same sizing rule you used: match canvas height then apply scale.
+      const baseS = h / ih;
+      const s = baseS * scale;
+
+      if (s <= 0) return;
+
+      // Wrap offsets so drift stays numerically bounded.
+      const tileW = iw * s;
+      const tileH = ih * s;
+
+      const ox = -((xOffPx % tileW) + tileW) % tileW; // 0..tileW
+      const oy = -((yOffPx % tileH) + tileH) % tileH; // 0..tileH
+
+      const pat = _getBgPattern(source);
+      if (!pat) return;
+
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.imageSmoothingEnabled = true;
+
+      // Scale the “world”, then fill a single rect with the repeating pattern.
+      ctx.setTransform(s, 0, 0, s, ox, oy);
+      ctx.fillStyle = pat;
+
+      // Fill enough area in pattern-space to cover the screen after scaling.
+      const pw = (w / s) + iw * 2;
+      const ph = (h / s) + ih * 2;
+      ctx.fillRect(-iw, -ih, pw, ph);
+
+      ctx.restore();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+    }
 
     function drawGlassShading(w, h) {
       if (GLASS_STRENGTH <= 0) return;
@@ -2527,6 +2690,61 @@
       ctx.fillRect(0, 0, w, h);
       ctx.restore();
 
+      // ============================================================
+      // Parallax background (far + mid) — drawn behind obstacles
+      // ============================================================
+      const isTitle = (!world.started && !world.over);
+      const isGameOver = (!!world.over);
+
+      const bgAllowed =
+        (world.started && !world.over) ||
+        (isTitle && BG_SHOW_ON_TITLE) ||
+        (isGameOver && BG_SHOW_ON_GAME_OVER);
+
+      if (bgAllowed) {
+        const isTitle = (!world.started && !world.over);
+        const isGameOver = (!!world.over);
+
+        const farA = (world.started && !world.over)
+          ? BG_FAR_ALPHA_PLAY
+          : (isTitle ? BG_FAR_ALPHA_TITLE : BG_FAR_ALPHA_GAMEOVER);
+
+        const midA = (world.started && !world.over)
+          ? BG_MID_ALPHA_PLAY
+          : (isTitle ? BG_MID_ALPHA_TITLE : BG_MID_ALPHA_GAMEOVER);
+
+        // 1) Draw FAR
+        if (BG_FAR_ENABLED) {
+          drawBgTiledLayer(bgFarImg, bgFarReady, bg.farX, w, h, {
+            alpha: farA,
+            scale: BG_FAR_SCALE
+          });
+        }
+
+  // 2) Punch FAR out wherever MID has any pixels (binary mask), independent of mid alpha
+  if (BG_MID_OCCLUDES_FAR && BG_FAR_ENABLED && bgMidMaskReady) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'destination-out';
+
+    // Use MID tiling parameters for the mask, so alignment matches mid perfectly.
+    drawBgTiledLayer(bgMidMaskCanvas, true, bg.midX, w, h, {
+      alpha: 1.0,
+      scale: BG_MID_SCALE
+    });
+
+    ctx.restore();
+    ctx.globalCompositeOperation = 'source-over';
+  }
+
+  // 3) Draw MID on top (with its own alpha)
+  if (BG_MID_ENABLED) {
+    drawBgTiledLayer(bgMidImg, bgMidReady, bg.midX, w, h, {
+      alpha: midA,
+      scale: BG_MID_SCALE
+    });
+  }
+}
+
       // Bottom UI placement (used to avoid the ground line cutting through buttons)
       const s = uiScalePx();
       const m = Math.round(10 * s * dpr);
@@ -2541,17 +2759,6 @@
 
       // Visual ground line: keep it ABOVE the bottom controls
       const groundYDraw = computeGroundY(w, h);
-
-      // Draw ground line
-      ctx.save();
-      ctx.globalAlpha = 0.9;
-      ctx.strokeStyle = border;
-      ctx.lineWidth = 2 * dpr;
-      ctx.beginPath();
-      ctx.moveTo(0, groundYDraw + 1);
-      ctx.lineTo(w, groundYDraw + 1);
-      ctx.stroke();
-      ctx.restore();
 
       // Obstacles
       for (const ob of world.obstacles) {
@@ -2846,14 +3053,13 @@
           ctx.textBaseline = 'middle';
 
           ctx.font = `${Math.round(18 * dpr)}px Orbitron, system-ui, sans-serif`;
-          ctx.fillText('Breathe', Math.round(w * 0.5), Math.round(h * 0.42));
+          uiFillText('Breathe', Math.round(w * 0.5), Math.round(h * 0.42), text, 0.92 * aUi);
 
           ctx.font = `${Math.round(30 * dpr)}px Orbitron, system-ui, sans-serif`;
-          ctx.fillText(String(countVal), Math.round(w * 0.5), Math.round(h * 0.50));
+          uiFillText(String(countVal), Math.round(w * 0.5), Math.round(h * 0.50), text, 0.92 * aUi);
 
           ctx.font = `${Math.round(12 * dpr)}px "JetBrains Mono", ui-monospace, monospace`;
-          ctx.globalAlpha = 0.78 * aUi;
-          ctx.fillText('Control paused', Math.round(w * 0.5), Math.round(h * 0.58));
+          uiFillText('Control paused', Math.round(w * 0.5), Math.round(h * 0.58), text, 0.78 * aUi);
           ctx.restore();
         }
       }
@@ -2911,8 +3117,9 @@
       // dtSim is capped for simulation stability (prevents big jumps after stalls).
       const dtReal = Math.max(0, (ts - (lastTs || ts)) / 1000);
 
-      // Cap only the simulation step (keep your existing 30 FPS safety cap).
-      const dtSim = Math.min(0.033, Math.max(0.001, dtReal));
+      // Keep gameplay speed consistent even if FPS drops.
+      // Clamp only to avoid massive jumps after tab-switch or stalls.
+      const dtSim = Math.min(0.033, Math.max(0, dtReal));
 
       lastTs = ts;
       // ----------------------------------------------------------------------
@@ -2942,7 +3149,7 @@
         }
       }
 
-      registerPulse(dtReal);
+      registerPulse(Math.min(dtReal, 0.05));
 
       // After 3 strong pulses: show 3 full stacks, then start (also works from GAME OVER).
       if (!world.started && startDelayT > 0) {
@@ -2996,6 +3203,19 @@
         }
 
         const scrollVx = world.speed * dpr;
+        // Background parallax scroll: derived from the same speed as obstacles.
+        // Optionally freeze during breath breaks for coherence.
+        const bgCanMove = !BG_FREEZE_DURING_REST || !inBreak;
+
+        if (bgCanMove) {
+          if (BG_FAR_ENABLED && bgFarReady) {
+            // advance in scene px; wrap lazily inside draw helper via modulo
+            bg.farX += (scrollVx * BG_FAR_PARALLAX) * dtSim;
+          }
+          if (BG_MID_ENABLED && bgMidReady) {
+            bg.midX += (scrollVx * BG_MID_PARALLAX) * dtSim;
+          }
+        }
         for (const ob of world.obstacles) {
           ob.x -= scrollVx * dtSim;
         }
