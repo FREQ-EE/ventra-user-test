@@ -2906,8 +2906,16 @@
 
       refreshLeaderboardIfStale(nowS);
 
-      const dt = Math.min(0.033, Math.max(0.001, (ts - (lastTs || ts)) / 1000));
+      // --- Time step split: real time vs simulation time --------------------
+      // dtReal tracks wall-clock seconds (uncapped) for timers/leaderboard pacing.
+      // dtSim is capped for simulation stability (prevents big jumps after stalls).
+      const dtReal = Math.max(0, (ts - (lastTs || ts)) / 1000);
+
+      // Cap only the simulation step (keep your existing 30 FPS safety cap).
+      const dtSim = Math.min(0.033, Math.max(0.001, dtReal));
+
       lastTs = ts;
+      // ----------------------------------------------------------------------
 
       // If Ventra disappears mid-run: stop play and return to start screen.
       if (!currentInput) {
@@ -2934,11 +2942,11 @@
         }
       }
 
-      registerPulse(dt);
+      registerPulse(dtReal);
 
       // After 3 strong pulses: show 3 full stacks, then start (also works from GAME OVER).
       if (!world.started && startDelayT > 0) {
-        startDelayT = Math.max(0, startDelayT - dt);
+        startDelayT = Math.max(0, startDelayT - dtReal);
         if (startDelayT === 0) {
           startGame(); // startGame() will resetGame() if world.over
         }
@@ -2948,20 +2956,20 @@
       if (!world.started && currentInput) {
         if (pulseWindowT > 0) {
           if (pulseVuAnimActive) {
-            pulseVuAnim = expApproach(pulseVuAnim, 1, dt, PULSE_VU_FILL_TAU_S);
+            pulseVuAnim = expApproach(pulseVuAnim, 1, dtReal, PULSE_VU_FILL_TAU_S);
             if (pulseVuAnim > 0.999) {
               pulseVuAnim = 1;
               pulseVuAnimActive = false;
             }
           } else {
-            pulseVuAnim = expApproach(pulseVuAnim, pulseVuAnim, dt, 0.2);
+            pulseVuAnim = expApproach(pulseVuAnim, pulseVuAnim, dtReal, 0.2);
           }
         } else {
-          pulseVuAnim = expApproach(pulseVuAnim, 0, dt, PULSE_VU_DUMP_TAU_S);
+          pulseVuAnim = expApproach(pulseVuAnim, 0, dtReal, PULSE_VU_DUMP_TAU_S);
           pulseVuAnimActive = false;
         }
       } else {
-        pulseVuAnim = expApproach(pulseVuAnim, 0, dt, 0.10);
+        pulseVuAnim = expApproach(pulseVuAnim, 0, dtReal, 0.10);
         pulseVuAnimActive = false;
       }
 
@@ -2971,8 +2979,8 @@
       if (world.started && !world.over) {
         const inBreak = (world.resting || world.returning);
 
-        world.survive += dt;
-        if (!inBreak) world.playT += dt;
+        world.survive += dtReal;
+        if (!inBreak) world.playT += dtReal;
 
         const targetSpeed = world.baseSpeed + SPEED_RAMP_PER_S * world.playT;
 
@@ -2980,7 +2988,7 @@
           // Hold speed constant through the pause so it cannot “catch up” while resting.
           world.speed = world.speedHold || world.speed;
         } else {
-          world.speed = expApproach(world.speed, targetSpeed, dt, SPEED_TAU_S);
+          world.speed = expApproach(world.speed, targetSpeed, dtSim, SPEED_TAU_S);
         }
 
         if (!world.restPending && !inBreak && world.playT >= world.nextRestAt) {
@@ -2989,7 +2997,7 @@
 
         const scrollVx = world.speed * dpr;
         for (const ob of world.obstacles) {
-          ob.x -= scrollVx * dt;
+          ob.x -= scrollVx * dtSim;
         }
 
         while (world.obstacles.length && (world.obstacles[0].x + (world.obstacles[0].w || world.obstacles[0].top.w)) < -40 * dpr) {
@@ -3013,7 +3021,7 @@
         }
 
         if (world.resting) {
-          world.restT += dt;
+          world.restT += dtSim;
 
           const dur = restDurationS();
           const u = clamp(world.restT / Math.max(1e-6, dur), 0, 1);
@@ -3021,8 +3029,8 @@
           const centreX = Math.round(w * REST_CENTRE_X_FRAC);
           const centreY = Math.round(h * REST_CENTRE_Y_FRAC);
 
-          player.x = expApproach(player.x, centreX, dt, REST_MOVE_TAU_S);
-          player.y = expApproach(player.y, centreY, dt, REST_MOVE_TAU_S);
+          player.x = expApproach(player.x, centreX, dtSim, REST_MOVE_TAU_S);
+          player.y = expApproach(player.y, centreY, dtSim, REST_MOVE_TAU_S);
 
           player.vy = 0;
           player.tilt = 0;
@@ -3034,7 +3042,7 @@
           const pulse01 = 0.5 - 0.5 * Math.cos(phase);
           world.restScale = baseScale * (1 + REST_PULSE_SCALE * pulse01);
 
-          tailVyFilt = expApproach(tailVyFilt, 0, dt, 0.06);
+          tailVyFilt = expApproach(tailVyFilt, 0, dtSim, 0.06);
 
           if (world.restT >= dur) {
             world.restT = dur;
@@ -3052,7 +3060,7 @@
         }
 
         if (world.returning) {
-          world.returnT += dt;
+          world.returnT += dtSim;
 
           const dur = restDurationS();
           const returnS = Math.max(0.05, dur * REST_RETURN_FRACTION);
@@ -3062,14 +3070,14 @@
 
           world.restUiAlpha = clamp(1 - (world.returnT / Math.max(1e-6, REST_UI_FADE_S)), 0, 1);
 
-          player.x = expApproach(player.x, laneX, dt, REST_RETURN_TAU_S);
-          player.y = expApproach(player.y, centreY, dt, REST_RETURN_TAU_S);
+          player.x = expApproach(player.x, laneX, dtSim, REST_RETURN_TAU_S);
+          player.y = expApproach(player.y, centreY, dtSim, REST_RETURN_TAU_S);
 
-          world.restScale = expApproach(world.restScale, 1, dt, REST_RETURN_TAU_S);
+          world.restScale = expApproach(world.restScale, 1, dtSim, REST_RETURN_TAU_S);
 
           player.vy = 0;
           player.tilt = 0;
-          tailVyFilt = expApproach(tailVyFilt, 0, dt, 0.06);
+          tailVyFilt = expApproach(tailVyFilt, 0, dtSim, 0.06);
 
           if (world.returnT >= returnS) {
             world.returning = false;
@@ -3111,12 +3119,12 @@
 
           let ay = (K * (targetY - player.y)) - (DAMP * player.vy) + gEff;
 
-          player.vy += ay * dt;
+          player.vy += ay * dtSim;
           player.vy = clamp(player.vy, -VTERM * dpr, VTERM * dpr);
-          player.y += player.vy * dt;
+          player.y += player.vy * dtSim;
 
           {
-            const alpha = 1 - Math.exp(-dt / Math.max(1e-6, TAIL_VY_TAU_S));
+            const alpha = 1 - Math.exp(-dtSim / Math.max(1e-6, TAIL_VY_TAU_S));
             tailVyFilt = tailVyFilt + alpha * (player.vy - tailVyFilt);
           }
 
@@ -3134,7 +3142,7 @@
           const mean = startMean + (endMean - startMean) * ease;
           const jitter = 0.18;
 
-          world.distAcc += (world.speed * dpr) * dt;
+          world.distAcc += (world.speed * dpr) * dtSim;
 
           if (!world.restPending) {
             if (world.distAcc >= world.nextSpawnDist) {
@@ -3186,8 +3194,8 @@
           const targetY = Math.round(baseY + bob);
 
           // Smooth approach so it feels alive rather than “locked”.
-          player.x = expApproach(player.x, targetX, dt, 0.12);
-          player.y = expApproach(player.y, targetY, dt, 0.16);
+          player.x = expApproach(player.x, targetX, dtReal, 0.12);
+          player.y = expApproach(player.y, targetY, dtReal, 0.16);
         }
       }
 
